@@ -1,5 +1,5 @@
 "use strict";
-/* MY BREW — all tuning & content lives here (the data.js rule) */
+/* HOME BREW — all tuning & content lives here (the data.js rule) */
 
 const DATA = {};
 

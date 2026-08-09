@@ -440,7 +440,7 @@ UI.credits = function(){
   const s=G_STATE.stats;
   const o=UI.open(`<h1>👑 BEST BREWERY IN THE WORLD</h1>
     <div class="sub">one dirtbag · one hose · one dream — realized</div><hr class="chalkline">
-    <p style="text-align:center;font-size:18px">MY BREW</p>
+    <p style="text-align:center;font-size:18px">HOME BREW</p>
     <p style="text-align:center" class="sub">a Dirty Boy Devs joint · The Room</p>
     <hr class="chalkline">
     <div class="row"><span class="nm">Days on the mountain</span><span class="pr">${G_STATE.day}</span></div>

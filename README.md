@@ -1,4 +1,4 @@
-# MY BREW — dev notes (v0.5, content-complete campaign)
+# HOME BREW — dev notes (v0.5, content-complete campaign)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
