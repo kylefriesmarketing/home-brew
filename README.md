@@ -1,9 +1,27 @@
-# HOME BREW — dev notes (v0.8, content-complete campaign)
+# HOME BREW — dev notes (v0.9, content-complete campaign)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v0.9 — BARLEYCORN BOB VISITS + the Bottling Line
+
+- 📓 **Barleycorn Bob finally exists in the flesh** (bible §3 — he was only ever
+  title-screen quotes). Bucket hat + camera, shuffles in every 4th evening from
+  day 3, orders off the best tap, scribbles, leaves. **Next morning THE HOLLER
+  HERALD runs his review** — wrong in funny ways even when it raves ("notes of
+  free-range crayons and premium hose") — with a real fame swing: legend +8 /
+  great +5 / good +3 / decent +1 / swill −5 / nothing-on-tap 0 (he reviews the
+  stools: sturdy). His own pint gives no fame (`fameMul:0`) — the COLUMN is his
+  power. State in `flags.bobLast/bobDay/bobReview`, all save-safe.
+- 🍾 **Bottling Line** (r3 $300, README's "idle income" candidate): park a FILLED
+  keg on it out back by the cold room → overnight it becomes bottle money at
+  `pints × price × 0.6` — no tips, no fame, no labor. The pub pays better but
+  needs you; the line pays while you sleep. Keg wakes up dirty. `stats.bottled`.
+- 🌟 **Drunks weave home under the fireflies** (bible §8's exact sentence):
+  tipsy leavers on the road at night trail little glows, and the truly gone
+  occasionally face-plant ("g'night, gravel").
 
 ## New in v0.8 — SPILLS, SLIPS & THE MOP (bible §7) + more boil chaos
 

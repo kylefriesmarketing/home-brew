@@ -63,6 +63,7 @@ DATA.MACHINES = {
   coldroom:  { name:"Cold Room",        cost:320, desc:"A frosty shed out back with Fermenter No. 3 inside.", rank:2 },
   winch:     { name:"Delivery Winch",   cost:220, desc:"Dawn supplies unpack themselves. Machines still ride the forklift.", rank:3 },
   fillline:  { name:"Keg Filler Line",  cost:360, desc:"Ready fermenters fill any clean keg left beside them.", rank:3 },
+  bottler:   { name:"Bottling Line",    cost:300, desc:"Park a FILLED keg on it at night — wake up to bottle money. No tips, no fame, no labor.", rank:3 },
   neon:      { name:"Neon Sign",        cost:420, desc:"HOPS & HOLLERS in buzzing tube-glass. One letter's given up. Fame trickles in nightly.", rank:4 },
   bigbertha: { name:"Big Bertha",       cost:480, desc:"Kettle Mk2 — every batch fills TWO kegs.", rank:4 },
   bigtim:    { name:"Big Tim (cook)",   cost:280, desc:"Keeps the kitchen stocked. Whispers to the fryer.", rank:2, staff:true, needsWing:"kitchen" },
@@ -99,6 +100,17 @@ DATA.CUSTOMERS = {
   tourist:{ name:"Tourist",wallet:22, sense:0.6, tipMul:1.6, fameMul:1.0, col:0xe86a5a, chat:["is this CRAFT?","we drove nine hours!","do y'all have wifi?"] },
   hiker:  { name:"Hiker",  wallet:12, sense:0.3, tipMul:1.0, fameMul:0.7, col:0x5a8a5a, chat:["water first. then beer.","I smelled this place from the ridge","carbs are carbs"] },
   joe:    { name:"Hollow Joe", wallet:99, sense:0, tipMul:3.0, fameMul:1.0, col:0x6a6a7a, special:true },
+  bob:    { name:"Barleycorn Bob", wallet:30, sense:0.8, tipMul:1.0, fameMul:0, col:0xd8c8a0, special:true, chat:["*scribbles*","don't mind me. reviewing.","mm. yes. words."] },
+};
+
+/* ---- Bob's press column (reviews are wrong in funny ways, even the raves) ---- */
+DATA.BOB_PRESS = {
+  notes:["free-range crayons","locally-sourced regret","barrel-aged in a barrel","gluten","wet flannel",
+         "artisanal pond","a ladder, somehow","forklift exhaust","grandma's porch","premium hose"],
+  stars:{ legend:"★★★★★ — I wept into my bucket hat.", great:"★★★★ — dangerously drinkable.",
+          good:"★★★ — honest mountain work.", decent:"★★ — it's beer, technically.",
+          swill:"★ — my mistake was hope.", none:"unrated — nothing on tap. Reviewed the stools instead: sturdy." },
+  fame:{ legend:8, great:5, good:3, decent:1, swill:-5, none:0 },
 };
 
 /* ---- fame ranks ---- */

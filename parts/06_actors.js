@@ -44,6 +44,9 @@ function makePerson(opt={}){
     straw(){ const h=new THREE.Group();
       const brim=clayCyl(0.62,0.66,0.08,0xd8c27a,0.08,313); h.add(brim);
       const top=clayCyl(0.3,0.34,0.3,0xd8c27a,0.08,314); top.position.y=0.18; h.add(top); return h; },
+    bucket(){ const h=new THREE.Group();
+      const top=clayCyl(0.3,0.37,0.26,0xc9bd9a,0.07,319); top.position.y=0.1; h.add(top);
+      const brim=clayCyl(0.46,0.52,0.1,0xb8ac8a,0.07,320); brim.position.y=-0.04; h.add(brim); return h; },
     beanie(){ const h=claySphere(0.36,0x4c7a4c,0.09,315); h.scale.y=0.75; return h; },
     cone(){ const h=clayCyl(0.02,0.3,0.5,0xe86a8a,0.06,316); h.position.y=0.2; return h; },
     snake(){ const h=new THREE.Group();
@@ -200,6 +203,7 @@ const CUSTOMER_LOOKS = {
   tourist:()=>({skin:pick([0xf0c8a0,0xe8b48c]), shirt:pick([0xe86a5a,0xe8a33d,0x5a8ae8,0xe85a9a]), pants:pick([0xe8e0cc,0x8a8a92]), hat:pick(["cone","beanie",null]), accessory:"camera"}),
   hiker:  ()=>({skin:pick([0xe8b48c,0xc98c5a]), shirt:pick([0x4c7a4c,0x5a8a8a]), pants:0x5e402a, hat:pick(["beanie",null]), accessory:"pack"}),
   joe:    ()=>({skin:0xcabd9e, shirt:0x5a5a6a, pants:0x4a4a52, hat:"hood", accessory:"lantern"}),
+  bob:    ()=>({skin:0xe8b48c, shirt:0xc9bd9a, pants:0x6a5a48, hat:"bucket", accessory:"camera"}),
 };
 function makeCustomer(type){
   const look=CUSTOMER_LOOKS[type]();

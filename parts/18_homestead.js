@@ -234,6 +234,7 @@ HOMESTEAD.setup = function(){
     mach_moppy:{x:18.8,z:-7.6},  mach_silo:{x:-21.3,z:-6},   mach_conveyor:{x:0,z:-2.8},
     mach_coldroom:{x:0,z:-11.2}, mach_winch:{x:3.6,z:17.4},  mach_fillline:{x:-4.7,z:-2.9},
     mach_neon:{x:14.8,z:8.8},    mach_bigbertha:{x:-14,z:-7.1},
+    mach_bottler:{x:-3.2,z:-11.6},
     ferm3:{x:0,z:-9.5},
   });
   HOMESTEAD.ferm3Station();
@@ -283,7 +284,7 @@ HOMESTEAD.update = function(dt){
   } else if(rk && Math.abs(rk.rotation.x)>0.001){
     rk.rotation.x=damp(rk.rotation.x,0,3,dt);   // settles after you hop off
   }
-  if(G_STATE){ HOMESTEAD.machinesUpdate(dt); HOMESTEAD.spillsUpdate(dt); }
+  if(G_STATE){ HOMESTEAD.machinesUpdate(dt); HOMESTEAD.spillsUpdate(dt); HOMESTEAD.pressUpdate(dt); }
 };
 
 /* ============================================================
@@ -809,3 +810,108 @@ HOMESTEAD.spillsUpdate = function(dt){
     }
   }
 };
+
+/* ============================================================
+   THE PRESS & THE BOTTLES — Barleycorn Bob finally VISITS
+   (bible §3/§10: reviews wrong in funny ways), the Bottling Line
+   (idle income), and drunks weaving home under the fireflies.
+   ============================================================ */
+
+/* ---------- Bottling Line ---------- */
+HOMESTEAD.buildMach.bottler = function(g){
+  for(const rz of [-0.4,0.4]){
+    const rail=clayBox(3.4,0.1,0.12,0x8a8a92,0.03,1001+rz); rail.position.set(0,0.75,rz); g.add(rail);
+  }
+  for(const [lx,lz] of [[-1.5,-0.35],[1.5,-0.35],[-1.5,0.35],[1.5,0.35]]){
+    const leg=clayCyl(0.06,0.08,0.75,0x6a5a48,0.05,1003+lx*lz); leg.position.set(lx,0.37,lz); g.add(leg);
+  }
+  for(let i=0;i<5;i++){
+    const b=clayCyl(0.09,0.11,0.34,0x8a5a28,0.04,1008+i); b.position.set(-1.2+i*0.5,0.97,0); g.add(b);
+    const neck=clayCyl(0.04,0.05,0.14,0x8a5a28,0.04,1013+i); neck.position.set(-1.2+i*0.5,1.2,0); g.add(neck);
+  }
+  const crate=clayBox(0.9,0.5,0.7,0xb08c5a,0.05,1018); crate.position.set(2.1,0.25,0); g.add(crate);
+  const motor=clayBox(0.5,0.45,0.5,0xe8a33d,0.06,1019); motor.position.set(-2.1,0.55,0); g.add(motor);
+};
+
+HOMESTEAD.bottleRun = function(){
+  if(!G_STATE.machines.bottler) return;
+  const keg=nearestItem(-3.2,-11.6,2.2, it=>it.kind==="keg" && it.data.state==="filled" && it.data.beer && !it.carriedBy && it!==FORK.cargo);
+  if(!keg) return;
+  const name=keg.data.beer.name, pints=keg.data.pints||0, price=keg.data.beer.suggest||3;
+  const pay=Math.max(1, Math.round(pints*price*0.6));
+  ECON.earn(pay,"bottles");
+  G_STATE.stats.bottled=(G_STATE.stats.bottled||0)+pints;
+  keg.data.state="dirty"; keg.data.beer=null; kegLook(keg);
+  setTimeout(()=>toast(`🍾 The line ran all night: ${pints} bottles of “${name}” → +${fmt$(pay)}. (keg's dirty)`,"gold",4200),4200);
+};
+
+WORLD.addStation({ id:"bottler", x:-3.2, z:-11.6, r:2.4,
+  prompt(c){
+    if(!G_STATE || !G_STATE.machines.bottler) return null;
+    if(c.carried && c.carried.kind==="keg" && c.carried.data.state==="filled")
+      return "🍾 Set the keg on the Bottling Line — bottles overnight";
+    if(!c.carried && nearestItem(-3.2,-11.6,2.2, it=>it.kind==="keg"&&it.data.state==="filled"&&!it.carriedBy))
+      return "(line's loaded — bottles at dawn)";
+    return null;
+  },
+  action(c){
+    const it=c.carried;
+    if(!it || it.kind!=="keg" || it.data.state!=="filled") return;
+    it.carriedBy=null; MAIN.player.carry=null; MAIN.player.carryPose=0; MAIN.player.heavyPose=0;
+    it.x=-3.2+rand(-0.3,0.3); it.z=-11.6+rand(-0.2,0.2); it.y=WORLD.getH(it.x,it.z);
+    it.vx=0; it.vy=0; it.vz=0;
+    SFX.play("clank",it.x,it.z);
+    toast(`On the line: “${it.data.beer.name}”. The bottles do the rest.`,"",2200);
+  }
+});
+
+/* ---------- Barleycorn Bob ---------- */
+HOMESTEAD.bobPress = function(){
+  const R=G_STATE.flags.bobReview;
+  if(!R) return;
+  G_STATE.flags.bobReview=null;
+  const P=DATA.BOB_PRESS;
+  const fame=P.fame[R.tier]!==undefined? P.fame[R.tier] : 0;
+  const line = R.tier==="none"
+    ? `📰 THE HOLLER HERALD — Bob's column: ${P.stars.none}`
+    : `📰 THE HOLLER HERALD: “${R.name}” — “notes of ${pick(P.notes)} and ${pick(P.notes)}.” ${P.stars[R.tier]}`;
+  setTimeout(()=>toast(line, fame>=3?"gold":fame<0?"bad":"", 6500),3600);
+  if(fame) STORY.fame(fame,"bob review");
+  G_STATE.stats.bobReviews=(G_STATE.stats.bobReviews||0)+1;
+};
+
+HOMESTEAD.pressUpdate = function(dt){
+  const F=G_STATE.flags;
+  /* Bob shuffles in every few evenings */
+  if(CYCLE.phase==="evening" && G_STATE.open && G_STATE.day>=3
+     && F.bobDay!==G_STATE.day && (G_STATE.day-(F.bobLast||-9))>=4
+     && PUB.customers.length<14){
+    F.bobDay=G_STATE.day; F.bobLast=G_STATE.day;
+    PUB.spawnCustomer("bob");
+    toast("📓 Barleycorn Bob shuffles in — bucket hat, notebook, JUDGING.","",3200);
+  }
+  /* capture what he drank the moment he heads out */
+  for(const c of PUB.customers){
+    if(c.type==="bob" && !c._rev && (c.state==="leave"||c.state==="road")){
+      c._rev=true;
+      F.bobReview = c.beer? {tier:c.beer.tier, name:c.beer.name} : {tier:"none"};
+    }
+  }
+  /* drunks weave home under the fireflies */
+  if(CYCLE.phase==="evening"||CYCLE.phase==="night"){
+    for(const c of PUB.customers){
+      if(c.state!=="road") continue;
+      const r=c.rig;
+      if(c.drunk>=1 && Math.random()<dt*0.8)
+        puff(r.x+rand(-.9,.9), r.y+rand(0.5,1.9), r.z+rand(-.9,.9), 0xd8f0a0, 0.09, 0.22, 1.5);
+      if(c.drunk>=2 && !c._tripped && Math.random()<dt*0.06){
+        c._tripped=true;
+        r.squash=0.6;
+        SFX.play("thud",r.x,r.z);
+        if(Math.random()<0.5) UI.bubbleRig(r, pick(["I'm ok","the ground moved","g'night, gravel"]), 1600);
+      }
+    }
+  }
+};
+
+BUS.on("newday", ()=>{ if(G_STATE){ HOMESTEAD.bottleRun(); HOMESTEAD.bobPress(); } });
