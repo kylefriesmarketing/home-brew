@@ -74,7 +74,9 @@ BREW.setup = function(){
       if(k.waterUnits<3){
         return G_STATE.machines.pipes ? "Fill — choose Hose or Piped Spring" : "Hook up the garden hose (free water!)";
       }
-      if(!k.barley) return "Needs a barley sack from the pantry";
+      if(!k.barley) return (G_STATE.machines.silo && (G_STATE.stock.barley||0)>0)
+        ? "🔥 FIRE IT UP (the auger's got the grain)"
+        : "Needs a barley sack from the pantry";
       return "🔥 FIRE IT UP";
     },
     action(c){
@@ -113,7 +115,13 @@ BREW.setup = function(){
         else BREW.startHose("hose");
         return;
       }
-      if(!k.barley){ toast("No grain, no beer. Pantry's on the west wall.","bad"); return; }
+      if(!k.barley){
+        if(G_STATE.machines.silo && (G_STATE.stock.barley||0)>0){
+          G_STATE.stock.barley--; k.barley=true;
+          ECON.refreshShelf();
+          if(typeof HOMESTEAD!=="undefined") HOMESTEAD.augerFeed();
+        } else { toast("No grain, no beer. Pantry's on the west wall.","bad"); return; }
+      }
       BREW.startBoil();
     }
   });
@@ -186,6 +194,7 @@ BREW.setup = function(){
         const F=G_STATE.ferms[i], k=G_STATE.kettle;
         if(k.stage==="wort" && !F.beer && !c.carried){
           F.beer=k.wortBeer; F.ready=false; F.days=DATA.TUNE.fermentDays;
+          F.kegs=G_STATE.machines.bigbertha?2:1;
           k.stage="idle"; k.water=null; k.waterUnits=0; k.ings=[]; k.barley=false; k.wortBeer=null;
           BREW.wortLook();
           SFX.play("pour",anchor.x,anchor.z); SFX.play("glug",anchor.x,anchor.z);
@@ -198,7 +207,9 @@ BREW.setup = function(){
           const keg=c.carried;
           keg.data.state="filled"; keg.data.beer=F.beer; keg.data.pints=DATA.TUNE.pintsPerKeg;
           kegLook(keg);
-          F.beer=null; F.ready=false;
+          F.kegs=(F.kegs||1)-1;
+          if(F.kegs>0) setTimeout(()=>toast("Bertha-sized batch — another keg's worth still in there!","gold",2400),1300);
+          else { F.beer=null; F.ready=false; }
           SFX.play("pour",anchor.x,anchor.z);
           toast(`🍺 Kegged: “${keg.data.beer.name}” (${keg.data.beer.tierName})`);
           if(CYCLE) CYCLE.obj("kegit");

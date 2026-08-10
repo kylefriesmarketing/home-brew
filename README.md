@@ -1,9 +1,32 @@
-# HOME BREW — dev notes (v0.6, content-complete campaign)
+# HOME BREW — dev notes (v0.7, content-complete campaign)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v0.7 — THE FULL MACHINE ROSTER (bible §14 complete)
+
+All 8 remaining machines, meshes + real effects, catalog-listed with rank gates:
+- 🤖 **Moppy** (r1 $130): wanders the pub bumping furniture (real colliders), fears
+  the porch step (shivers + turns), and tips run ×1.12 (hooked at `ECON.earn`).
+- 🌾 **Grain Silo** (r1 $150): FIRE IT UP auto-feeds barley from stock — the auger
+  rumbles, grain puffs. Hook in the kettle station's fire branch.
+- 🛼 **Conveyor Line** (r2 $260): anything set on the belt (yard gap, z≈−2.8) rides
+  east into the pub. Item-physics push; rollers spin when busy.
+- ❄️ **Cold Room** (r2 $320): frosty shed out back with **Fermenter No. 3** inside —
+  `ferms[2]` created on install, own station (`ferm3`), breathes cold puffs.
+- ⛓️ **Delivery Winch** (r3 $220): dawn supply crates unpack themselves into stock;
+  machine crates still ride the forklift (the forklift is sacred).
+- 🔁 **Keg Filler Line** (r3 $360): 1 Hz scan — ready fermenter + clean keg within
+  3.4 → filled. Honors Bertha's 2-keg batches.
+- 💡 **Neon Sign** (r4 $420): on the pub ridge, fades with the pub roof (mats pushed
+  into the roof registry), first O flickers via texture swap, glows evenings
+  (+~5 fame/evening, blackout-aware via `power`).
+- 🔴 **Big Bertha** (r4 $480): the kettle reborn — 1.26×, deep red, riveted, and
+  every batch is **2 kegs' worth** (`F.kegs`, decremented by hand-fill AND line).
+⚠️ ferm stations are id'd `ferm0`/`ferm1`/`ferm3` (index-based, then mine).
+⚠️ `F.kegs` rides the save; old saves deep-default to 1 via `(F.kegs||1)`.
 
 ## New in v0.6 — the homestead pass (`18_homestead.js`)
 

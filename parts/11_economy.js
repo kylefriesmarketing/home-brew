@@ -44,6 +44,7 @@ ECON.mergeDefaults = function(saved){
 
 ECON.earn = function(n, what){
   if(!G_STATE) return;
+  if((what==="tips"||what==="joe tip") && G_STATE.machines.moppy) n=Math.ceil(n*1.12);  // clean floors tip better
   G_STATE.cash+=n;
   if(what==="tips"||what==="joe tip") G_STATE.ledger.tips+=n; else G_STATE.ledger.sales+=n;
   UI.hud();
@@ -133,8 +134,21 @@ ECON.dropCrates = function(){
     setTimeout(()=>WINGS.hireArrive(s.key,false), 2500);
   });
   if(smalls.length){
-    const crate=spawnItem("crate", pad.x+rand(-1,1), pad.z+rand(-1,1), {contents:smalls});
-    crate.vy=2;
+    if(G_STATE.machines.winch){
+      const lines=[];
+      for(const l of smalls){
+        if(l.kind==="ing"){ G_STATE.stock[l.key]=(G_STATE.stock[l.key]||0)+l.qty; lines.push(l.qty+"× "+DATA.INGREDIENTS[l.key].name); }
+        if(l.kind==="keg"){ for(let i=0;i<l.qty;i++){ const k=spawnItem("keg", pad.x+rand(-1.4,1.4), pad.z+rand(-1,1), {state:"clean"}); k.vy=1.5; } lines.push(l.qty+"× keg"); }
+        if(l.kind==="bucket"){ for(let i=0;i<l.qty;i++) spawnItem("bucket", pad.x+rand(-1.4,1.4), pad.z+rand(-1,1), {tier:null}); lines.push(l.qty+"× bucket"); }
+        if(l.kind==="gift"){ G_STATE.gift[l.key]=(G_STATE.gift[l.key]||0)+l.qty; lines.push(l.qty+"× "+l.key); WINGS.refreshGiftShelf(); }
+      }
+      ECON.refreshShelf();
+      if(typeof HOMESTEAD!=="undefined") HOMESTEAD.winchSwing();
+      setTimeout(()=>toast("⛓️ The winch unpacked the delivery: "+lines.join(", "),"",3200),900);
+    } else {
+      const crate=spawnItem("crate", pad.x+rand(-1,1), pad.z+rand(-1,1), {contents:smalls});
+      crate.vy=2;
+    }
   }
   machines.forEach((m,i)=>{
     const crate=spawnItem("crate", pad.x-2.5+i*2.6, pad.z+2.2, {machine:m.key});
@@ -208,6 +222,7 @@ ECON.installMachine = function(key, silent){
     WORLD.props.ferm2ghost.traverse(o=>{ if(o.isMesh){ o.material.opacity=1; o.material.transparent=false; o.castShadow=true; } });
     WORLD.addCollider(-7.5,-2.7,-5.3,-0.5);
   }
+  if(key==="coldroom" && typeof HOMESTEAD!=="undefined") HOMESTEAD.coldroomInstalled();
   SFX.rank=G_STATE.rank;
   WINGS.checkHatUnlocks();
 };
@@ -260,9 +275,13 @@ ECON.buildMachineMesh = function(key){
       const l1=new THREE.PointLight(0xffd98a,0.8,6,2); l1.position.y=2.6; g.add(l1);
       break; }
     case "ferm2": return null;
+    default:
+      if(typeof HOMESTEAD!=="undefined" && HOMESTEAD.buildMach[key]) HOMESTEAD.buildMach[key](g);
+      break;
   }
   g.position.set(a.x, WORLD.getH(a.x,a.z)+0.3, a.z);
   if(key==="selfpour") g.position.set(10.6,0.3,-6.1);
+  if(g.userData.place) g.userData.place(g);
   g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
   WORLD.scene.add(g);
   ECON.machineMeshes[key]=g;

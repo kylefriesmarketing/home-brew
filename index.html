@@ -154,7 +154,7 @@ kbd{background:#3a3128;color:#ffd98a;border-radius:4px;border:1px solid #6b4a2f;
     <div class="credit">a Dirty Boy Devs joint · The Room</div>
   </div>
   <div class="bigfade" id="fade"></div>
-  <div id="verchip">home brew v0.6</div>
+  <div id="verchip">home brew v0.7</div>
 </div>
 <script>
 (function(){
@@ -53265,6 +53265,14 @@ DATA.MACHINES = {
   splashy:   { name:"Ol' Splashy",      cost:200, desc:"Keg washer. Soaks you every time. Worth it.", rank:1 },
   pipes:     { name:"Spring Pipe Run",  cost:220, desc:"Pipes spring water straight to the kettle tap.", rank:2 },
   selfpour:  { name:"Self-Pour Taps",   cost:260, desc:"Customers pour themselves. Freedom.", rank:2 },
+  moppy:     { name:"Moppy",            cost:130, desc:"Mop-roomba. Fears the porch step. Clean floors tip better.", rank:1, gag:"fears the porch step" },
+  silo:      { name:"Grain Silo",       cost:150, desc:"Silo + auger — the kettle feeds itself barley from stock.", rank:1 },
+  conveyor:  { name:"Conveyor Line",    cost:260, desc:"Rolls anything you set on it from the brewhouse to the pub.", rank:2 },
+  coldroom:  { name:"Cold Room",        cost:320, desc:"A frosty shed out back with Fermenter No. 3 inside.", rank:2 },
+  winch:     { name:"Delivery Winch",   cost:220, desc:"Dawn supplies unpack themselves. Machines still ride the forklift.", rank:3 },
+  fillline:  { name:"Keg Filler Line",  cost:360, desc:"Ready fermenters fill any clean keg left beside them.", rank:3 },
+  neon:      { name:"Neon Sign",        cost:420, desc:"HOPS & HOLLERS in buzzing tube-glass. One letter's given up. Fame trickles in nightly.", rank:4 },
+  bigbertha: { name:"Big Bertha",       cost:480, desc:"Kettle Mk2 — every batch fills TWO kegs.", rank:4 },
   bigtim:    { name:"Big Tim (cook)",   cost:280, desc:"Keeps the kitchen stocked. Whispers to the fryer.", rank:2, staff:true, needsWing:"kitchen" },
   darlene:   { name:"Darlene (bartender)", cost:340, desc:"Pours for you. Immune to chaos.", rank:3, staff:true },
 };
@@ -55084,7 +55092,9 @@ BREW.setup = function(){
       if(k.waterUnits<3){
         return G_STATE.machines.pipes ? "Fill — choose Hose or Piped Spring" : "Hook up the garden hose (free water!)";
       }
-      if(!k.barley) return "Needs a barley sack from the pantry";
+      if(!k.barley) return (G_STATE.machines.silo && (G_STATE.stock.barley||0)>0)
+        ? "🔥 FIRE IT UP (the auger's got the grain)"
+        : "Needs a barley sack from the pantry";
       return "🔥 FIRE IT UP";
     },
     action(c){
@@ -55123,7 +55133,13 @@ BREW.setup = function(){
         else BREW.startHose("hose");
         return;
       }
-      if(!k.barley){ toast("No grain, no beer. Pantry's on the west wall.","bad"); return; }
+      if(!k.barley){
+        if(G_STATE.machines.silo && (G_STATE.stock.barley||0)>0){
+          G_STATE.stock.barley--; k.barley=true;
+          ECON.refreshShelf();
+          if(typeof HOMESTEAD!=="undefined") HOMESTEAD.augerFeed();
+        } else { toast("No grain, no beer. Pantry's on the west wall.","bad"); return; }
+      }
       BREW.startBoil();
     }
   });
@@ -55196,6 +55212,7 @@ BREW.setup = function(){
         const F=G_STATE.ferms[i], k=G_STATE.kettle;
         if(k.stage==="wort" && !F.beer && !c.carried){
           F.beer=k.wortBeer; F.ready=false; F.days=DATA.TUNE.fermentDays;
+          F.kegs=G_STATE.machines.bigbertha?2:1;
           k.stage="idle"; k.water=null; k.waterUnits=0; k.ings=[]; k.barley=false; k.wortBeer=null;
           BREW.wortLook();
           SFX.play("pour",anchor.x,anchor.z); SFX.play("glug",anchor.x,anchor.z);
@@ -55208,7 +55225,9 @@ BREW.setup = function(){
           const keg=c.carried;
           keg.data.state="filled"; keg.data.beer=F.beer; keg.data.pints=DATA.TUNE.pintsPerKeg;
           kegLook(keg);
-          F.beer=null; F.ready=false;
+          F.kegs=(F.kegs||1)-1;
+          if(F.kegs>0) setTimeout(()=>toast("Bertha-sized batch — another keg's worth still in there!","gold",2400),1300);
+          else { F.beer=null; F.ready=false; }
           SFX.play("pour",anchor.x,anchor.z);
           toast(`🍺 Kegged: “${keg.data.beer.name}” (${keg.data.beer.tierName})`);
           if(CYCLE) CYCLE.obj("kegit");
@@ -55966,6 +55985,7 @@ ECON.mergeDefaults = function(saved){
 
 ECON.earn = function(n, what){
   if(!G_STATE) return;
+  if((what==="tips"||what==="joe tip") && G_STATE.machines.moppy) n=Math.ceil(n*1.12);  // clean floors tip better
   G_STATE.cash+=n;
   if(what==="tips"||what==="joe tip") G_STATE.ledger.tips+=n; else G_STATE.ledger.sales+=n;
   UI.hud();
@@ -56055,8 +56075,21 @@ ECON.dropCrates = function(){
     setTimeout(()=>WINGS.hireArrive(s.key,false), 2500);
   });
   if(smalls.length){
-    const crate=spawnItem("crate", pad.x+rand(-1,1), pad.z+rand(-1,1), {contents:smalls});
-    crate.vy=2;
+    if(G_STATE.machines.winch){
+      const lines=[];
+      for(const l of smalls){
+        if(l.kind==="ing"){ G_STATE.stock[l.key]=(G_STATE.stock[l.key]||0)+l.qty; lines.push(l.qty+"× "+DATA.INGREDIENTS[l.key].name); }
+        if(l.kind==="keg"){ for(let i=0;i<l.qty;i++){ const k=spawnItem("keg", pad.x+rand(-1.4,1.4), pad.z+rand(-1,1), {state:"clean"}); k.vy=1.5; } lines.push(l.qty+"× keg"); }
+        if(l.kind==="bucket"){ for(let i=0;i<l.qty;i++) spawnItem("bucket", pad.x+rand(-1.4,1.4), pad.z+rand(-1,1), {tier:null}); lines.push(l.qty+"× bucket"); }
+        if(l.kind==="gift"){ G_STATE.gift[l.key]=(G_STATE.gift[l.key]||0)+l.qty; lines.push(l.qty+"× "+l.key); WINGS.refreshGiftShelf(); }
+      }
+      ECON.refreshShelf();
+      if(typeof HOMESTEAD!=="undefined") HOMESTEAD.winchSwing();
+      setTimeout(()=>toast("⛓️ The winch unpacked the delivery: "+lines.join(", "),"",3200),900);
+    } else {
+      const crate=spawnItem("crate", pad.x+rand(-1,1), pad.z+rand(-1,1), {contents:smalls});
+      crate.vy=2;
+    }
   }
   machines.forEach((m,i)=>{
     const crate=spawnItem("crate", pad.x-2.5+i*2.6, pad.z+2.2, {machine:m.key});
@@ -56130,6 +56163,7 @@ ECON.installMachine = function(key, silent){
     WORLD.props.ferm2ghost.traverse(o=>{ if(o.isMesh){ o.material.opacity=1; o.material.transparent=false; o.castShadow=true; } });
     WORLD.addCollider(-7.5,-2.7,-5.3,-0.5);
   }
+  if(key==="coldroom" && typeof HOMESTEAD!=="undefined") HOMESTEAD.coldroomInstalled();
   SFX.rank=G_STATE.rank;
   WINGS.checkHatUnlocks();
 };
@@ -56182,9 +56216,13 @@ ECON.buildMachineMesh = function(key){
       const l1=new THREE.PointLight(0xffd98a,0.8,6,2); l1.position.y=2.6; g.add(l1);
       break; }
     case "ferm2": return null;
+    default:
+      if(typeof HOMESTEAD!=="undefined" && HOMESTEAD.buildMach[key]) HOMESTEAD.buildMach[key](g);
+      break;
   }
   g.position.set(a.x, WORLD.getH(a.x,a.z)+0.3, a.z);
   if(key==="selfpour") g.position.set(10.6,0.3,-6.1);
+  if(g.userData.place) g.userData.place(g);
   g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
   WORLD.scene.add(g);
   ECON.machineMeshes[key]=g;
@@ -58283,6 +58321,14 @@ HOMESTEAD.setup = function(){
   HOMESTEAD.buildRoofs();
   HOMESTEAD.buildStand();
   HOMESTEAD.buildRocker();
+  /* machine pads (ghost rings + install stations key off these) */
+  Object.assign(WORLD.anchors, {
+    mach_moppy:{x:18.8,z:-7.6},  mach_silo:{x:-21.3,z:-6},   mach_conveyor:{x:0,z:-2.8},
+    mach_coldroom:{x:0,z:-11.2}, mach_winch:{x:3.6,z:17.4},  mach_fillline:{x:-4.7,z:-2.9},
+    mach_neon:{x:14.8,z:8.8},    mach_bigbertha:{x:-14,z:-7.1},
+    ferm3:{x:0,z:-9.5},
+  });
+  HOMESTEAD.ferm3Station();
   WORLD.addStation({ id:"farmstand", x:-9, z:19.4, r:2.8,
     prompt(){ if(!G_STATE || MAIN.mode!=="walk") return null;
       return "🧺 MawMaw's stand — buy what ya forgot"; },
@@ -58327,6 +58373,346 @@ HOMESTEAD.update = function(dt){
     P.group.rotation.x=rock*0.9;
   } else if(rk && Math.abs(rk.rotation.x)>0.001){
     rk.rotation.x=damp(rk.rotation.x,0,3,dt);   // settles after you hop off
+  }
+  if(G_STATE) HOMESTEAD.machinesUpdate(dt);
+};
+
+/* ============================================================
+   THE MACHINE SHOP — the rest of the bible's §14 roster.
+   Meshes route here via ECON.buildMachineMesh's default case;
+   effects live in machinesUpdate + hooks in brew/econ.
+   ============================================================ */
+
+HOMESTEAD.augerT=0; HOMESTEAD.winchT=0; HOMESTEAD.fillT=0;
+HOMESTEAD.mop={ang:2.2, t:3, spin:0, shy:0};
+
+HOMESTEAD.augerFeed = function(){
+  HOMESTEAD.augerT=1.4;
+  SFX.play("glug",-14,-4);
+  toast("🌾 The auger rumbles — grain's in.","",1800);
+};
+HOMESTEAD.winchSwing = function(){
+  HOMESTEAD.winchT=2.4;
+  SFX.play("clank",3.6,17.4);
+};
+HOMESTEAD.coldroomInstalled = function(){
+  while(G_STATE.ferms.length<3) G_STATE.ferms.push({beer:null,ready:false,days:0});
+  if(!HOMESTEAD._coldCol){
+    HOMESTEAD._coldCol=true;
+    WORLD.addCollider(-1.9,-12.8,1.9,-12.3);
+    WORLD.addCollider(-1.9,-12.8,-1.5,-10.0);
+    WORLD.addCollider(1.5,-12.8,1.9,-10.0);
+  }
+};
+
+/* neon sign texture — withO lights every tube; !withO leaves the first O dark */
+function neonTex(withO){
+  const cv=document.createElement("canvas"); cv.width=1024; cv.height=224;
+  const c=cv.getContext("2d");
+  c.fillStyle="#221d2e"; c.fillRect(0,0,1024,224);
+  c.strokeStyle="rgba(0,0,0,0.4)"; c.lineWidth=14; c.strokeRect(7,7,1010,210);
+  c.textAlign="center"; c.textBaseline="middle"; c.font="bold 100px Georgia";
+  const txt="HOPS & HOLLERS";
+  c.fillStyle="#3a3050"; c.fillText(txt,512,116);
+  c.shadowColor="#ff7ac8"; c.shadowBlur=30; c.fillStyle="#ffd6ee";
+  if(withO) c.fillText(txt,512,116);
+  else {
+    const wAll=c.measureText(txt).width, wPre=c.measureText("H").width, wO=c.measureText("O").width;
+    const x0=512-wAll/2;
+    c.textAlign="left";
+    c.fillText("H", x0, 116);
+    c.fillText("PS & HOLLERS", x0+wPre+wO, 116);
+    c.textAlign="center";
+  }
+  const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=4;
+  return t;
+}
+
+/* ---------- builders (g is the machine group; anchor-placed by ECON after) ---------- */
+HOMESTEAD.buildMach = {
+
+  moppy(g){
+    const base=clayCyl(0.5,0.55,0.26,0x8a8a92,0.05,901); base.position.y=0.22; g.add(base);
+    const skirt=clayCyl(0.6,0.58,0.1,0xe8dcc0,0.18,902); skirt.position.y=0.07; g.add(skirt);
+    const btn=claySphere(0.09,0xb5472e,0.08,903); btn.position.set(0,0.38,0); g.add(btn);
+    const eyes=makeEyes(0.07,0.1); eyes.position.set(0,0.34,0.44); g.add(eyes);
+    g.userData.eyes=eyes;
+    const flag=clayBox(0.04,0.4,0.04,0x6a4a30,0.06,904); flag.position.set(-0.3,0.55,-0.2); g.add(flag);
+    const pennant=clayBox(0.02,0.12,0.2,0xe8a33d,0.05,905); pennant.position.set(-0.3,0.72,-0.1); g.add(pennant);
+  },
+
+  silo(g){
+    for(const [lx,lz] of [[-0.6,-0.6],[0.6,-0.6],[-0.6,0.6],[0.6,0.6]]){
+      const leg=clayCyl(0.08,0.1,1.0,0x6a5a48,0.05,911+lx*lz); leg.position.set(lx,0.5,lz); g.add(leg);
+    }
+    const body=clayCyl(0.95,1.0,3.2,0xd8d2c2,0.04,915); body.position.y=2.5; g.add(body);
+    const band=clayCyl(1.0,1.0,0.22,0xb5472e,0.03,916); band.position.y=2.0; g.add(band);
+    const cone=clayCyl(0.12,1.0,1.0,0x9a8a72,0.05,917); cone.position.y=4.55; g.add(cone);
+    const cap=claySphere(0.2,0x6a5a48,0.08,918); cap.position.y=5.1; g.add(cap);
+    const tube=clayCyl(0.13,0.13,4.6,0x8a8a92,0.04,919);
+    tube.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), new THREE.Vector3(0.86,-0.12,0.24).normalize());
+    tube.position.set(2.3,3.9,0.6);
+    g.add(tube); g.userData.auger=tube;
+    const spout=clayCyl(0.16,0.1,0.4,0x6a5a48,0.05,920); spout.position.set(4.5,3.3,1.2); g.add(spout);
+  },
+
+  conveyor(g){
+    for(const rz of [-0.55,0.55]){
+      const rail=clayBox(10.6,0.12,0.14,0x6a4a30,0.03,921+rz); rail.position.set(0,0.36,rz); g.add(rail);
+    }
+    for(const [lx,lz] of [[-4.8,-0.5],[4.8,-0.5],[-4.8,0.5],[4.8,0.5]]){
+      const leg=clayBox(0.14,0.34,0.14,0x6a5a48,0.05,923+lx*lz); leg.position.set(lx,0.17,lz); g.add(leg);
+    }
+    g.userData.rollers=[];
+    for(let i=0;i<7;i++){
+      const r=clayCyl(0.15,0.15,1.05,0x9a7a52,0.06,930+i);
+      r.rotation.x=Math.PI/2; r.position.set(-4.5+i*1.5,0.34,0);
+      g.add(r); g.userData.rollers.push(r);
+    }
+  },
+
+  coldroom(g){
+    const fl=clayBox(3.6,0.16,3.0,0xcfd8dc,0.03,941); fl.position.set(0,0.02,-0.1); g.add(fl);
+    const back=clayBox(3.6,2.9,0.4,0xdfe8ea,0.04,942); back.position.set(0,1.45,-1.45); g.add(back);
+    for(const sx of [-1.7,1.7]){
+      const side=clayBox(0.4,2.9,2.6,0xd4e0e4,0.04,943+sx); side.position.set(sx,1.45,-0.2); g.add(side);
+    }
+    const roof=clayBox(4.1,0.3,3.4,0xeef4f6,0.06,946); roof.position.set(0,3.0,-0.15); roof.rotation.z=0.04; g.add(roof);
+    for(let i=0;i<5;i++){
+      const ice=clayCyl(0.001,0.05,0.3+(i%3)*0.12,0xdff0f8,0.02,948+i);
+      ice.position.set(-1.4+i*0.7,2.75,1.28); g.add(ice);
+    }
+    const f=new THREE.Group();
+    const tank=clayCyl(0.95,1.1,2.6,0xdfe8ea,0.04,951,14); tank.position.y=1.6; f.add(tank);
+    const top=claySphere(0.95,0xcfdce2,0.05,952); top.position.y=2.9; top.scale.y=0.55; f.add(top);
+    const airlock=clayCyl(0.09,0.09,0.5,0x88b0b8,0.1,953); airlock.position.set(0.3,3.4,0); f.add(airlock);
+    const legs=clayCyl(0.5,0.6,0.35,0x6a7a82,0.05,954); legs.position.y=0.2; f.add(legs);
+    const band=clayCyl(1.02,1.02,0.24,0x5a8ab8,0.03,955,14); band.position.y=1.9; f.add(band);
+    f.position.set(0,0.05,-0.35); f.scale.setScalar(0.82);
+    g.add(f);
+  },
+
+  winch(g){
+    for(const lx of [-0.8,0.8]){
+      const leg=clayCyl(0.1,0.13,3.4,0x6a4a30,0.05,961+lx); leg.position.set(lx,1.7,0); leg.rotation.z=lx>0?-0.22:0.22; g.add(leg);
+    }
+    const arm=new THREE.Group();
+    const beam=clayBox(0.16,0.16,3.0,0x8a6a48,0.04,963); beam.position.set(0,0,-1.4); arm.add(beam);
+    const rope=clayBox(0.05,1.6,0.05,0xc9b878,0.08,964); rope.position.set(0,-0.85,-2.7); arm.add(rope);
+    const hook=new THREE.Mesh(geoGet("winchhook",()=>new THREE.TorusGeometry(0.16,0.05,6,10)), clayMat(0x8a8a92));
+    hook.position.set(0,-1.75,-2.7); arm.add(hook);
+    arm.position.y=3.3;
+    arm.rotation.y=0.6;
+    g.add(arm); g.userData.arm=arm;
+  },
+
+  fillline(g){
+    for(const pz of [-2.3,2.3]){
+      const post=clayCyl(0.09,0.12,3.0,0x8a8a92,0.05,971+pz); post.position.set(0,1.5,pz); g.add(post);
+    }
+    const rail=clayBox(0.14,0.14,5.2,0x8a8a92,0.04,973); rail.position.set(0,2.95,0); g.add(rail);
+    for(const hz of [-1.3,1.3]){
+      const armOut=clayBox(1.8,0.12,0.12,0x8a8a92,0.04,974+hz); armOut.position.set(-0.9,2.9,hz); g.add(armOut);
+      const hose=clayCyl(0.06,0.06,1.5,0x3e7a3e,0.08,976+hz); hose.position.set(-1.7,2.05,hz); g.add(hose);
+      const nozzle=claySphere(0.11,0xb5472e,0.06,978+hz); nozzle.position.set(-1.7,1.25,hz); g.add(nozzle);
+    }
+    const pump=clayBox(0.7,0.8,0.7,0xe8a33d,0.05,980); pump.position.set(0,0.4,0); g.add(pump);
+    const eyes=makeEyes(0.07,0.1); eyes.position.set(0,0.62,0.38); g.add(eyes); g.userData.eyes=eyes;
+  },
+
+  neon(g){
+    const board=clayBox(6.4,1.6,0.18,0x2a2430,0.02,981); board.position.y=0.95; g.add(board);
+    const texA=neonTex(true), texB=neonTex(false);
+    const plane=new THREE.Mesh(new THREE.PlaneGeometry(6.0,1.35),
+      new THREE.MeshBasicMaterial({map:texA, transparent:true}));
+    plane.position.set(0,0.95,0.11); g.add(plane);
+    for(const px of [-2.6,2.6]){
+      const strut=clayBox(0.12,0.7,0.12,0x4a4a4a,0.05,983+px); strut.position.set(px,0.18,0); g.add(strut);
+    }
+    const light=new THREE.PointLight(0xff9ad8,0,15,2); light.position.set(0,1.0,1.6); g.add(light);
+    g.userData.texA=texA; g.userData.texB=texB; g.userData.plane=plane;
+    g.userData.light=light; g.userData.ft=0; g.userData.oLit=true;
+    g.userData.place=(grp)=>{
+      grp.position.set(12,8.35,-1.25);
+      grp.traverse(o=>{ if(o.isMesh){ o.castShadow=false; o.material=o.material.clone(); o.material.transparent=true; } });
+      grp.userData.plane=grp.children.find(o=>o.geometry&&o.geometry.type==="PlaneGeometry");
+      const pubRoof=HOMESTEAD.roofs[1];
+      if(pubRoof) grp.traverse(o=>{ if(o.isMesh) pubRoof.mats.push(o.material); });
+    };
+  },
+
+  bigbertha(g){
+    const K=WORLD.props.kettle;
+    if(K && !K.userData.bertha){
+      K.userData.bertha=true;
+      K.scale.setScalar(1.26);
+      const body=K.children[0];
+      if(body){ body.material=body.material.clone(); body.material.color.set(0xa84a30); }
+      const band=clayCyl(1.68,1.72,0.34,0x6a3a28,0.04,991,16); band.position.y=1.7; K.add(band);
+      for(let i=0;i<8;i++){ const a=i/8*Math.PI*2;
+        const riv=claySphere(0.08,0xd8b06a,0.1,992+i);
+        riv.position.set(Math.cos(a)*1.66,1.7,Math.sin(a)*1.66); K.add(riv);
+      }
+    }
+    const plate=textPlank("BIG BERTHA","kettle mk2",1.9,0.55);
+    plate.position.y=1.15; g.add(plate);
+    const post=clayCyl(0.07,0.09,1.0,0x6a4a30,0.05,999); post.position.y=0.5; g.add(post);
+  },
+};
+
+/* ---------- Fermenter No. 3 (in the Cold Room) ---------- */
+HOMESTEAD.ferm3Station = function(){
+  const anchor=WORLD.anchors.ferm3;
+  WORLD.addStation({ id:"ferm3", x:anchor.x, z:anchor.z, r:2.3,
+    prompt(c){
+      if(!G_STATE || !G_STATE.machines.coldroom) return null;
+      const F=G_STATE.ferms[2]; if(!F) return null;
+      const k=G_STATE.kettle;
+      if(k.stage==="wort" && !F.beer && !c.carried) return "Pour the wort in — Fermenter 3 (the cold one)";
+      if(F.beer && !F.ready) return "(bubbling in the cold… ready after a night's sleep)";
+      if(F.beer && F.ready){
+        if(c.carried && c.carried.kind==="keg" && c.carried.data.state==="clean")
+          return `Fill keg — “${F.beer.name}” (${F.beer.tierName})`;
+        return `Ready: “${F.beer.name}” — bring a CLEAN keg`;
+      }
+      return null;
+    },
+    action(c){
+      const F=G_STATE.ferms[2]; if(!F) return;
+      const k=G_STATE.kettle;
+      if(k.stage==="wort" && !F.beer && !c.carried){
+        F.beer=k.wortBeer; F.ready=false; F.days=DATA.TUNE.fermentDays;
+        F.kegs=G_STATE.machines.bigbertha?2:1;
+        k.stage="idle"; k.water=null; k.waterUnits=0; k.ings=[]; k.barley=false; k.wortBeer=null;
+        BREW.wortLook();
+        SFX.play("pour",anchor.x,anchor.z); SFX.play("glug",anchor.x,anchor.z);
+        for(let p=0;p<6;p++) setTimeout(()=>puff(anchor.x,2.4,anchor.z-1,0xdfeef4,0.35,1,0.8),p*120);
+        toast(`Wort's in the cold room. “${F.beer.name}” sleeps well tonight.`);
+        if(CYCLE) CYCLE.obj("xfer");
+        return;
+      }
+      if(F.beer && F.ready && c.carried && c.carried.kind==="keg" && c.carried.data.state==="clean"){
+        const keg=c.carried;
+        keg.data.state="filled"; keg.data.beer=F.beer; keg.data.pints=DATA.TUNE.pintsPerKeg;
+        kegLook(keg);
+        F.kegs=(F.kegs||1)-1;
+        if(F.kegs>0) setTimeout(()=>toast("Bertha-sized batch — another keg's worth still in there!","gold",2400),1300);
+        else { F.beer=null; F.ready=false; }
+        SFX.play("pour",anchor.x,anchor.z);
+        toast(`🍺 Kegged: “${keg.data.beer.name}” (${keg.data.beer.tierName})`);
+        if(CYCLE) CYCLE.obj("kegit");
+        return;
+      }
+      if(F.beer && !F.ready) toast("Shhh. It's fermenting. In the COLD.","",1600);
+    }
+  });
+};
+
+/* ---------- per-frame machine life ---------- */
+HOMESTEAD.machinesUpdate = function(dt){
+  const M=G_STATE.machines, MM=ECON.machineMeshes;
+
+  /* Moppy wanders the pub, bumps the furniture, fears the porch step */
+  if(M.moppy && MM.moppy){
+    const m=MM.moppy, s=HOMESTEAD.mop;
+    s.t-=dt;
+    if(s.shy>0){
+      s.shy-=dt;
+      m.scale.x=1+Math.sin(CLAY.raw*30)*0.05; m.scale.z=1-Math.sin(CLAY.raw*30)*0.05;
+    } else if(s.spin>0){
+      s.spin-=dt; m.rotation.y+=dt*7;
+      if(Math.random()<dt*3) puff(m.position.x,0.25,m.position.z,0xd8d2c2,0.14,0.3,0.5);
+    } else {
+      m.scale.set(1,1,1);
+      if(s.t<=0){
+        if(Math.random()<0.3){ s.spin=1.1; } else { s.ang+=rand(-1.4,1.4); }
+        s.t=rand(3,6.5);
+      }
+      const sp=0.85;
+      let nx=m.position.x+Math.sin(s.ang)*sp*dt, nz=m.position.z+Math.cos(s.ang)*sp*dt;
+      [nx,nz]=WORLD.collide(nx,nz,0.55);
+      if(nz>5.4 && nx>9 && nx<13.2){ s.shy=0.9; s.ang+=Math.PI; SFX.play("boing",nx,nz); }
+      nx=clamp(nx,4.3,19.9); nz=clamp(nz,-8.2,6.0);
+      if(Math.hypot(nx-m.position.x,nz-m.position.z)<sp*dt*0.3) s.ang+=rand(1.2,2.4);
+      m.position.x=nx; m.position.z=nz;
+      m.rotation.y=damp(m.rotation.y,s.ang,6,dt);
+    }
+    if(m.userData.eyes) m.userData.eyes.userData.update(dt,0,0,null);
+  }
+
+  /* auger feed rumble */
+  if(HOMESTEAD.augerT>0){
+    HOMESTEAD.augerT-=dt;
+    const s=MM.silo;
+    if(s&&s.userData.auger) s.userData.auger.rotation.z=Math.sin(CLAY.raw*40)*0.02;
+    if(Math.random()<dt*8) puff(-14+rand(-.4,.4),3.1,-4+rand(-.4,.4),0xc9a86a,0.3,0.9,0.7);
+  }
+
+  /* winch swings after a dawn unpack */
+  if(HOMESTEAD.winchT>0){
+    HOMESTEAD.winchT-=dt;
+    const w=MM.winch;
+    if(w&&w.userData.arm) w.userData.arm.rotation.y=0.6+Math.sin(CLAY.t*3)*0.5*(HOMESTEAD.winchT/2.4);
+  }
+
+  /* neon: the O gives up at random; glows at dusk; fame trickles while it shines */
+  if(M.neon && MM.neon){
+    const u=MM.neon.userData;
+    u.ft-=dt;
+    if(u.ft<=0){
+      u.oLit=Math.random()<0.7;
+      u.ft=u.oLit?rand(0.5,2.4):rand(0.07,0.45);
+      if(u.plane){ u.plane.material.map=u.oLit?u.texA:u.texB; u.plane.material.needsUpdate=true; }
+    }
+    const glow=(CYCLE.phase==="evening"||CYCLE.phase==="night") && G_STATE.power!==false;
+    if(u.light) u.light.intensity=damp(u.light.intensity, glow?(u.oLit?1.4:0.9):0, 6, dt);
+    if(glow && CYCLE.phase==="evening"){
+      G_STATE.fame+=dt*0.032;
+      G_STATE.ledger.fameDelta+=dt*0.032;
+    }
+  }
+
+  /* keg filler line: ready fermenter + clean keg beside it → filled */
+  HOMESTEAD.fillT-=dt;
+  if(HOMESTEAD.fillT<=0){
+    HOMESTEAD.fillT=1;
+    if(M.fillline){
+      const anchors=[WORLD.anchors.ferm1, WORLD.anchors.ferm2, WORLD.anchors.ferm3];
+      G_STATE.ferms.forEach((F,i)=>{
+        if(!F || !F.beer || !F.ready) return;
+        if(i===1 && !M.ferm2) return;
+        if(i===2 && !M.coldroom) return;
+        const a=anchors[i]; if(!a) return;
+        const keg=nearestItem(a.x,a.z,3.4, it=>it.kind==="keg"&&it.data.state==="clean"&&!it.carriedBy&&it!==FORK.cargo);
+        if(!keg) return;
+        keg.data.state="filled"; keg.data.beer=F.beer; keg.data.pints=DATA.TUNE.pintsPerKeg;
+        kegLook(keg);
+        F.kegs=(F.kegs||1)-1;
+        if(F.kegs<=0){ F.beer=null; F.ready=false; }
+        SFX.play("pour",a.x,a.z);
+        for(let p=0;p<4;p++) setTimeout(()=>puff(keg.x,1.2,keg.z,0xd8cfa8,0.28,0.9,0.7),p*140);
+        toast(`🔁 Filler line kegged “${keg.data.beer.name}”`,"",2200);
+      });
+    }
+  }
+
+  /* conveyor: anything set on the belt rides east into the pub */
+  if(M.conveyor && MM.conveyor){
+    let busy=false;
+    for(const it of ITEMS.list){
+      if(it.carriedBy || it===FORK.cargo) continue;
+      if(it.x>-5.4 && it.x<5.4 && it.z>-3.5 && it.z<-2.1){
+        it.vx=damp(it.vx||0, 2.3, 8, dt);
+        it.vz=damp(it.vz||0, (-2.8-it.z)*2, 6, dt);
+        busy=true;
+      }
+    }
+    if(busy) for(const r of MM.conveyor.userData.rollers) r.rotation.y+=dt*6;
+  }
+
+  /* the cold room breathes */
+  if(M.coldroom && Math.random()<dt*0.7){
+    puff(rand(-1,1),1.1,-9.9,0xe8f4f8,0.4,0.35,1.6);
   }
 };
 
