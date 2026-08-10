@@ -1,8 +1,27 @@
-# HOME BREW — dev notes (v0.5, content-complete campaign)
+# HOME BREW — dev notes (v0.6, content-complete campaign)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
+**LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v0.6 — the homestead pass (`18_homestead.js`)
+
+- 🏠 **Roofs.** Real gable roofs (rusty tin on the shack + stovepipe, dark shingle
+  on the pub, green lean-to over the wings + kitchen stack) with the **dollhouse
+  fade**: walk inside and that building's roof melts to 12% so the diorama stays
+  playable. ⚠️ roof materials are CLONES — `clayMat` caches by colour, so fading
+  a shared material would fade half the mountain. Roofs cast no shadow on purpose
+  (interiors were lit rooflessly). The pub gable finally wears Kyle's §22 sign:
+  **HOPS & HOLLERS**.
+- 🧺 **MawMaw's Farm Stand** (by the road, west of the driveway): forgot to order?
+  Buy barley + 3 rotating honest ingredients at a proud 1.75× markup, plus her ONE
+  spare keg per day ($26, spawned out back — you haul it). Honor box. She KNOWS.
+- 🪑 **The porch rocker = time skip.** Sit a spell and the whole sim runs at 7×
+  (`MAIN.drive` sub-steps the loop, so customers/ferments/truck/weather all
+  fast-forward together — no system ever sees a big dt). Auto-stands you at the
+  next phase; blocked mid-boil and at night; E or a step gets you up. The chair
+  rocks at 12fps like every other prop.
 
 ## New in v0.5 (on top of the full v0.1 core loop)
 
@@ -38,8 +57,12 @@ Splashy, kettle-lid rattle at high pressure, the sabotage raccoon physically dan
 kettle, footsteps, pour poses, hop-leaf confetti.
 
 ## Architecture
-17 parts, all tuning in `01_data.js`. New: `16_wings.js` (kitchen/gift/hats/staff),
-`17_events.js` (storms/leaf/bears). `python3 build.py` → single `my-brew.html`.
+18 parts, all tuning in `01_data.js`. New: `16_wings.js` (kitchen/gift/hats/staff),
+`17_events.js` (storms/leaf/bears), `18_homestead.js` (roofs/farm stand/rocker).
+Build: `python3 build.py` OR `node build.mjs` (Kyle's PC has no Python — use the
+portable node at `C:\Users\kylef\tools\node`). ⚠️ build.mjs uses replacer
+FUNCTIONS in String.replace — three.js contains `$'` which a plain string
+replacement expands and silently corrupts the build.
 
 ## Testing
 `test_boot.py` · `test_loop.py` (core loop) · `test_story.py` (economy/forklift/loan/fair) ·

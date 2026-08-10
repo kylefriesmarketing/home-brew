@@ -212,6 +212,18 @@ MAIN.titleCam = function(dt){
 };
 
 /* ---------- the loop ---------- */
+/* drive() is the frame entry: at timeScale N it runs N-1 extra un-rendered
+   sub-ticks so EVERYTHING (customers, ferments, truck, weather) fast-forwards
+   together — same trick as MB.step, no system ever sees a big dt */
+MAIN.timeScale = 1;
+MAIN.drive = function(dt){
+  const n = Math.max(1, Math.round(MAIN.timeScale));
+  if(n > 1){
+    const sub = Math.min(dt, 0.05);
+    for(let i = 1; i < n; i++) MAIN.tick(sub, true);
+  }
+  MAIN.tick(dt);
+};
 MAIN.tick = function(dt, skipRender){
   dt=Math.min(dt,0.05);
   MAIN.time+=dt;
@@ -233,6 +245,7 @@ MAIN.tick = function(dt, skipRender){
   STORY.update(dt);
   if(typeof WINGS!=="undefined") WINGS.update(dt);
   if(typeof EVENTS!=="undefined") EVENTS.update(dt);
+  if(typeof HOMESTEAD!=="undefined") HOMESTEAD.update(dt);
   UI.update(dt);
 
   if(MAIN.mode==="walk"||MAIN.mode==="fork") MAIN.scanInteract();
@@ -270,13 +283,14 @@ MAIN.boot = function(){
   CYCLE.setup();
   if(typeof WINGS!=="undefined") WINGS.setup();
   if(typeof EVENTS!=="undefined") EVENTS.setup();
+  if(typeof HOMESTEAD!=="undefined") HOMESTEAD.setup();
   UI.setup();
 
   let last=performance.now();
   const frame=()=>{
     const now=performance.now();
     const dt=(now-last)/1000; last=now;
-    MAIN.tick(dt);
+    MAIN.drive(dt);
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
@@ -285,7 +299,7 @@ MAIN.boot = function(){
     if(document.hidden){
       const now=performance.now();
       const dt=(now-last)/1000; last=now;
-      MAIN.tick(dt);
+      MAIN.drive(dt);
     }
   }, 50);
 };

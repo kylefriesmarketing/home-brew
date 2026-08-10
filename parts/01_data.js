@@ -188,6 +188,9 @@ DATA.TAGLINES = [
 DATA.TUNE = {
   startCash: 60,
   phaseLen: { morning: 115, afternoon: 135, evening: 170 },
+  rockScale: 7,                     // porch rocker time speed-up
+  standMarkup: 1.75,                // MawMaw's farm-stand convenience surcharge
+  standKegPrice: 26,                // her one spare keg (catalog: 15. she knows.)
   pintsPerKeg: 18,
   boilTime: 38,
   fermentDays: 1,
