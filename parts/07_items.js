@@ -89,6 +89,12 @@ function itemMesh(kind, data){
     const cup=clayCyl(0.25,0.12,0.4,0xe8c23d,0.05,456); cup.position.y=0.5; g.add(cup);
     const base=clayBox(0.34,0.16,0.34,0x6a4a30,0.04,457); base.position.y=0.1; g.add(base);
   }
+  else if(kind==="mop"){
+    const stick=clayCyl(0.05,0.06,1.5,0x9a7a52,0.05,461); stick.position.y=0.8; stick.rotation.z=0.12; g.add(stick);
+    const head=claySphere(0.2,0xe8e0cc,0.25,462); head.position.set(0.16,0.12,0); head.scale.y=0.6; g.add(head);
+    for(let i=0;i<5;i++){ const strand=clayCapsule(0.035,0.16,0xd8d0b8,0.2,463+i);
+      strand.position.set(0.16+rand(-.12,.12),0.1,rand(-.12,.12)); strand.rotation.z=rand(-.5,.5); g.add(strand); }
+  }
   g.traverse(o=>{ if(o.isMesh && o.castShadow===undefined) o.castShadow=true; });
   return g;
 }

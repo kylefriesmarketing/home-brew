@@ -184,9 +184,10 @@ BREW.setup = function(){
         if(k.stage==="wort" && !F.beer && !c.carried) return "Pour the wort in — Fermenter "+(i+1);
         if(F.beer && !F.ready) return "(bubbling… ready after a night's sleep)";
         if(F.beer && F.ready){
+          const more=(F.kegs||1)>1? ` — ${F.kegs} kegs' worth in there!` : "";
           if(c.carried && c.carried.kind==="keg" && c.carried.data.state==="clean")
-            return `Fill keg — “${F.beer.name}” (${F.beer.tierName})`;
-          return `Ready: “${F.beer.name}” — bring a CLEAN keg`;
+            return `Fill keg — “${F.beer.name}” (${F.beer.tierName})${more}`;
+          return `Ready: “${F.beer.name}” — bring a CLEAN keg${more}`;
         }
         return null;
       },
@@ -367,6 +368,8 @@ BREW.update = function(dt){
           delete it.data.washT;
           it.data.state="clean"; it.data.beer=null; kegLook(it);
           SFX.play("ding",it.x,it.z);
+          if(typeof HOMESTEAD!=="undefined" && Math.random()<0.5)
+            HOMESTEAD.spill(it.x+rand(-0.8,0.8), it.z+rand(-0.6,0.6), rand(0.4,0.6), "water");  // Splashy overspray
         }
       }
     }
@@ -400,21 +403,49 @@ BREW.update = function(dt){
   }
   b.heat=clamp(b.heat,0,1); b.pres=clamp(b.pres,0,1);
 
+  // storm: thunder cracks jolt the pressure out of nowhere
+  if(G_STATE.weather==="storm" && Math.random()<dt*0.05){
+    b.pres+=0.14; shake(0.3);
+    SFX.play("thunder",K.x,K.z);
+    toast("⚡ THUNDER — pressure jolt!","bad",1200);
+  }
+
   // events
   b.nextEvent-=dt;
   if(!b.eventNow && b.nextEvent<=0){
     b.nextEvent=rand(6,11);
     const roll=Math.random();
-    if(G_STATE.kettle.floaties && roll<0.4){ b.eventNow={type:"floaties",t:2.6}; b.pres+=0.2; toast("🪵 FLOATIES! Pressure jump — VENT!","bad",1800); SFX.play("ew"); }
-    else if(roll<0.55){ b.eventNow={type:"bee",t:3}; toast("🐝 a bee is INTERESTED","bad",1500); }
+    if(G_STATE.kettle.floaties && roll<0.35){ b.eventNow={type:"floaties",t:2.6}; b.pres+=0.2; toast("🪵 FLOATIES! Pressure jump — VENT!","bad",1800); SFX.play("ew"); }
+    else if(roll<0.48){ b.eventNow={type:"bee",t:3}; toast("🐝 a bee is INTERESTED","bad",1500); }
+    else if(roll<0.6){ b.eventNow={type:"squirrel",t:3.2}; toast("🐿️ A SQUIRREL STOLE A LOG — feed that fire!","bad",1900); SFX.play("boing",K.x,K.z); }
+    else if(roll<0.7){ b.eventNow={type:"pop",t:2.8}; toast("🍿 popcorn kernel in the grain?!","bad",1600); }
+    else if(roll<0.78){ b.eventNow={type:"sniff",t:3.4, ok:true}; toast("👃 Hollow Joe leans over the fence. HOLD IT STEADY.","gold",2200); }
     else { b.eventNow={type:"foam",t:4, mash:4}; SFX.play("steam"); }
   }
   if(b.eventNow){
     b.eventNow.t-=dt;
     if(b.eventNow.type==="bee"){ b.heat+=Math.sin(b.t*13)*dt*0.24; }
     if(b.eventNow.type==="foam"){ b.pres+=dt*0.1; }
+    if(b.eventNow.type==="squirrel"){ b.heat-=dt*0.3; }
+    if(b.eventNow.type==="pop"){
+      if(Math.random()<dt*5){ b.heat+=rand(-0.05,0.05); b.pres+=rand(-0.03,0.06); SFX.play("plop",K.x,K.z); puff(K.x+rand(-.6,.6),3.2,K.z-2.4,0xfff2d8,0.16,1.8,0.6); }
+    }
+    if(b.eventNow.type==="sniff"){
+      const okNow=(b.heat>=b.bandH[0]&&b.heat<=b.bandH[1])&&(b.pres>=b.bandP[0]&&b.pres<=b.bandP[1]);
+      if(!okNow) b.eventNow.ok=false;
+    }
     if(b.eventNow.t<=0){
-      if(b.eventNow.type==="foam"){ b.pres+=0.16; toast("foam got away from you","bad",1300); }
+      if(b.eventNow.type==="foam"){
+        b.pres+=0.16; toast("foam got away from you","bad",1300);
+        if(typeof HOMESTEAD!=="undefined") HOMESTEAD.spill(K.x+rand(-1.4,1.4), K.z-2.4+rand(-1,1), rand(0.5,0.7), "wort");
+      }
+      if(b.eventNow.type==="squirrel") toast("the squirrel is gone. so is your log.","",1400);
+      if(b.eventNow.type==="sniff"){
+        if(b.eventNow.ok){
+          ECON.earn(15,"joe tip"); SFX.play("chaching",K.x,K.z);
+          toast("👃 Joe nods slow. “smells cursed. i love it.” (+$15)","gold",2600);
+        } else toast("Joe wanders off, unimpressed.","",1600);
+      }
       b.eventNow=null;
     }
   }
@@ -454,6 +485,8 @@ BREW.blowLid = function(){
   lid.userData.fly={vy:14, vx:rand(-2,2), vz:rand(-2,2), t:0};
   shake(1); SFX.play("boing",K.x,K.z); SFX.play("steam",K.x,K.z); SFX.play("splash",K.x,K.z);
   for(let i=0;i<22;i++) puff(K.x+rand(-1.5,1.5),2.6+rand(2),K.z-2.4+rand(-1.5,1.5),0xc9a86a,0.5,rand(2,5),1.6);
+  if(typeof HOMESTEAD!=="undefined") for(let i=0;i<3;i++)
+    HOMESTEAD.spill(K.x+rand(-2.2,2.2), K.z-2.4+rand(-1.6,1.6), rand(0.5,0.85), "wort");
   MAIN.player.squash=0.5;
   MAIN.player.greenT=4;
   toast("💥 THE LID! You are wearing the batch.","bad",3200);

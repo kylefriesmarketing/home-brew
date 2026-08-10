@@ -338,6 +338,8 @@ PUB.update = function(dt){
         if(c.t>rand(2.2,3.2)+c.sips){
           c.sips++; c.t=0;
           SFX.play("gulp",r.x,r.z);
+          if(Math.random()<0.09 && typeof HOMESTEAD!=="undefined")
+            HOMESTEAD.spill(r.x+rand(-.5,.5), r.z+rand(-.5,.5), rand(0.4,0.6), "beer");
           r.parts.armR.rotation.x=-2.4; setTimeout(()=>{ if(!c.dead) r.parts.armR.rotation.x=0; },420);
           if(c.mug&&c.mug.userData.foam) c.mug.userData.foam.scale.y=Math.max(0.08,0.5-c.sips*0.12);
           if(c.sips>=4) PUB.finishDrink(c);

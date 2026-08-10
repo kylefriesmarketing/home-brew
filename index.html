@@ -154,7 +154,7 @@ kbd{background:#3a3128;color:#ffd98a;border-radius:4px;border:1px solid #6b4a2f;
     <div class="credit">a Dirty Boy Devs joint · The Room</div>
   </div>
   <div class="bigfade" id="fade"></div>
-  <div id="verchip">home brew v0.7</div>
+  <div id="verchip">home brew v0.8</div>
 </div>
 <script>
 (function(){
@@ -54795,6 +54795,12 @@ function itemMesh(kind, data){
     const cup=clayCyl(0.25,0.12,0.4,0xe8c23d,0.05,456); cup.position.y=0.5; g.add(cup);
     const base=clayBox(0.34,0.16,0.34,0x6a4a30,0.04,457); base.position.y=0.1; g.add(base);
   }
+  else if(kind==="mop"){
+    const stick=clayCyl(0.05,0.06,1.5,0x9a7a52,0.05,461); stick.position.y=0.8; stick.rotation.z=0.12; g.add(stick);
+    const head=claySphere(0.2,0xe8e0cc,0.25,462); head.position.set(0.16,0.12,0); head.scale.y=0.6; g.add(head);
+    for(let i=0;i<5;i++){ const strand=clayCapsule(0.035,0.16,0xd8d0b8,0.2,463+i);
+      strand.position.set(0.16+rand(-.12,.12),0.1,rand(-.12,.12)); strand.rotation.z=rand(-.5,.5); g.add(strand); }
+  }
   g.traverse(o=>{ if(o.isMesh && o.castShadow===undefined) o.castShadow=true; });
   return g;
 }
@@ -55202,9 +55208,10 @@ BREW.setup = function(){
         if(k.stage==="wort" && !F.beer && !c.carried) return "Pour the wort in — Fermenter "+(i+1);
         if(F.beer && !F.ready) return "(bubbling… ready after a night's sleep)";
         if(F.beer && F.ready){
+          const more=(F.kegs||1)>1? ` — ${F.kegs} kegs' worth in there!` : "";
           if(c.carried && c.carried.kind==="keg" && c.carried.data.state==="clean")
-            return `Fill keg — “${F.beer.name}” (${F.beer.tierName})`;
-          return `Ready: “${F.beer.name}” — bring a CLEAN keg`;
+            return `Fill keg — “${F.beer.name}” (${F.beer.tierName})${more}`;
+          return `Ready: “${F.beer.name}” — bring a CLEAN keg${more}`;
         }
         return null;
       },
@@ -55385,6 +55392,8 @@ BREW.update = function(dt){
           delete it.data.washT;
           it.data.state="clean"; it.data.beer=null; kegLook(it);
           SFX.play("ding",it.x,it.z);
+          if(typeof HOMESTEAD!=="undefined" && Math.random()<0.5)
+            HOMESTEAD.spill(it.x+rand(-0.8,0.8), it.z+rand(-0.6,0.6), rand(0.4,0.6), "water");  // Splashy overspray
         }
       }
     }
@@ -55418,21 +55427,49 @@ BREW.update = function(dt){
   }
   b.heat=clamp(b.heat,0,1); b.pres=clamp(b.pres,0,1);
 
+  // storm: thunder cracks jolt the pressure out of nowhere
+  if(G_STATE.weather==="storm" && Math.random()<dt*0.05){
+    b.pres+=0.14; shake(0.3);
+    SFX.play("thunder",K.x,K.z);
+    toast("⚡ THUNDER — pressure jolt!","bad",1200);
+  }
+
   // events
   b.nextEvent-=dt;
   if(!b.eventNow && b.nextEvent<=0){
     b.nextEvent=rand(6,11);
     const roll=Math.random();
-    if(G_STATE.kettle.floaties && roll<0.4){ b.eventNow={type:"floaties",t:2.6}; b.pres+=0.2; toast("🪵 FLOATIES! Pressure jump — VENT!","bad",1800); SFX.play("ew"); }
-    else if(roll<0.55){ b.eventNow={type:"bee",t:3}; toast("🐝 a bee is INTERESTED","bad",1500); }
+    if(G_STATE.kettle.floaties && roll<0.35){ b.eventNow={type:"floaties",t:2.6}; b.pres+=0.2; toast("🪵 FLOATIES! Pressure jump — VENT!","bad",1800); SFX.play("ew"); }
+    else if(roll<0.48){ b.eventNow={type:"bee",t:3}; toast("🐝 a bee is INTERESTED","bad",1500); }
+    else if(roll<0.6){ b.eventNow={type:"squirrel",t:3.2}; toast("🐿️ A SQUIRREL STOLE A LOG — feed that fire!","bad",1900); SFX.play("boing",K.x,K.z); }
+    else if(roll<0.7){ b.eventNow={type:"pop",t:2.8}; toast("🍿 popcorn kernel in the grain?!","bad",1600); }
+    else if(roll<0.78){ b.eventNow={type:"sniff",t:3.4, ok:true}; toast("👃 Hollow Joe leans over the fence. HOLD IT STEADY.","gold",2200); }
     else { b.eventNow={type:"foam",t:4, mash:4}; SFX.play("steam"); }
   }
   if(b.eventNow){
     b.eventNow.t-=dt;
     if(b.eventNow.type==="bee"){ b.heat+=Math.sin(b.t*13)*dt*0.24; }
     if(b.eventNow.type==="foam"){ b.pres+=dt*0.1; }
+    if(b.eventNow.type==="squirrel"){ b.heat-=dt*0.3; }
+    if(b.eventNow.type==="pop"){
+      if(Math.random()<dt*5){ b.heat+=rand(-0.05,0.05); b.pres+=rand(-0.03,0.06); SFX.play("plop",K.x,K.z); puff(K.x+rand(-.6,.6),3.2,K.z-2.4,0xfff2d8,0.16,1.8,0.6); }
+    }
+    if(b.eventNow.type==="sniff"){
+      const okNow=(b.heat>=b.bandH[0]&&b.heat<=b.bandH[1])&&(b.pres>=b.bandP[0]&&b.pres<=b.bandP[1]);
+      if(!okNow) b.eventNow.ok=false;
+    }
     if(b.eventNow.t<=0){
-      if(b.eventNow.type==="foam"){ b.pres+=0.16; toast("foam got away from you","bad",1300); }
+      if(b.eventNow.type==="foam"){
+        b.pres+=0.16; toast("foam got away from you","bad",1300);
+        if(typeof HOMESTEAD!=="undefined") HOMESTEAD.spill(K.x+rand(-1.4,1.4), K.z-2.4+rand(-1,1), rand(0.5,0.7), "wort");
+      }
+      if(b.eventNow.type==="squirrel") toast("the squirrel is gone. so is your log.","",1400);
+      if(b.eventNow.type==="sniff"){
+        if(b.eventNow.ok){
+          ECON.earn(15,"joe tip"); SFX.play("chaching",K.x,K.z);
+          toast("👃 Joe nods slow. “smells cursed. i love it.” (+$15)","gold",2600);
+        } else toast("Joe wanders off, unimpressed.","",1600);
+      }
       b.eventNow=null;
     }
   }
@@ -55472,6 +55509,8 @@ BREW.blowLid = function(){
   lid.userData.fly={vy:14, vx:rand(-2,2), vz:rand(-2,2), t:0};
   shake(1); SFX.play("boing",K.x,K.z); SFX.play("steam",K.x,K.z); SFX.play("splash",K.x,K.z);
   for(let i=0;i<22;i++) puff(K.x+rand(-1.5,1.5),2.6+rand(2),K.z-2.4+rand(-1.5,1.5),0xc9a86a,0.5,rand(2,5),1.6);
+  if(typeof HOMESTEAD!=="undefined") for(let i=0;i<3;i++)
+    HOMESTEAD.spill(K.x+rand(-2.2,2.2), K.z-2.4+rand(-1.6,1.6), rand(0.5,0.85), "wort");
   MAIN.player.squash=0.5;
   MAIN.player.greenT=4;
   toast("💥 THE LID! You are wearing the batch.","bad",3200);
@@ -55879,6 +55918,8 @@ PUB.update = function(dt){
         if(c.t>rand(2.2,3.2)+c.sips){
           c.sips++; c.t=0;
           SFX.play("gulp",r.x,r.z);
+          if(Math.random()<0.09 && typeof HOMESTEAD!=="undefined")
+            HOMESTEAD.spill(r.x+rand(-.5,.5), r.z+rand(-.5,.5), rand(0.4,0.6), "beer");
           r.parts.armR.rotation.x=-2.4; setTimeout(()=>{ if(!c.dead) r.parts.armR.rotation.x=0; },420);
           if(c.mug&&c.mug.userData.foam) c.mug.userData.foam.scale.y=Math.max(0.08,0.5-c.sips*0.12);
           if(c.sips>=4) PUB.finishDrink(c);
@@ -55966,6 +56007,7 @@ ECON.freshState = function(){
     food:{}, gift:{tee:0,globe:0,plush:0},
     spentGrain:0, bearStage:0,
     weather:"clear", power:true, leafDay:false, cleanNights:0,
+    puddles:[],
   };
 };
 ECON.newState = function(){
@@ -58329,6 +58371,7 @@ HOMESTEAD.setup = function(){
     ferm3:{x:0,z:-9.5},
   });
   HOMESTEAD.ferm3Station();
+  HOMESTEAD.spillsSetup();
   WORLD.addStation({ id:"farmstand", x:-9, z:19.4, r:2.8,
     prompt(){ if(!G_STATE || MAIN.mode!=="walk") return null;
       return "🧺 MawMaw's stand — buy what ya forgot"; },
@@ -58374,7 +58417,7 @@ HOMESTEAD.update = function(dt){
   } else if(rk && Math.abs(rk.rotation.x)>0.001){
     rk.rotation.x=damp(rk.rotation.x,0,3,dt);   // settles after you hop off
   }
-  if(G_STATE) HOMESTEAD.machinesUpdate(dt);
+  if(G_STATE){ HOMESTEAD.machinesUpdate(dt); HOMESTEAD.spillsUpdate(dt); }
 };
 
 /* ============================================================
@@ -58624,16 +58667,49 @@ HOMESTEAD.machinesUpdate = function(dt){
       if(Math.random()<dt*3) puff(m.position.x,0.25,m.position.z,0xd8d2c2,0.14,0.3,0.5);
     } else {
       m.scale.set(1,1,1);
-      if(s.t<=0){
+      /* his true calling: seek the nearest spill on his floor */
+      let tgt=null, td=1e9, ti=-1;
+      if(G_STATE.puddles) G_STATE.puddles.forEach((p,i)=>{
+        if(p.x<4.3||p.x>19.9||p.z<-8.2||p.z>6.0) return;
+        const d=dist2(m.position.x,m.position.z,p.x,p.z);
+        if(d<td){ td=d; tgt=p; ti=i; }
+      });
+      s.detour=Math.max(0,(s.detour||0)-dt);
+      if(tgt && td<0.42*0.42){
+        HOMESTEAD.mopUp(ti,true);
+        s.spin=1.2;
+        SFX.play("ding",m.position.x,m.position.z);
+      } else if(tgt && s.detour<=0){
+        /* the bar splits his world: route around its west end when the spill's
+           on the other side (he's a roomba, not a pathfinder) */
+        let ax=tgt.x, az=tgt.z;
+        const mySide=m.position.z<-6.7? -1 : m.position.z>-5.1? 1 : 0;
+        const tgSide=tgt.z<-6.7? -1 : tgt.z>-5.1? 1 : 0;
+        if(mySide && tgSide && mySide!==tgSide){
+          if(m.position.x>4.75){
+            ax=4.5;
+            /* front side: cut west through the clear corridor between stools and tables */
+            az=(mySide>0)? clamp(m.position.z,-3.2,-0.6) : m.position.z;
+          }
+          else { ax=4.5; az=(tgSide>0? -4.4 : -7.3); }           // then walk the lane through
+        }
+        s.ang=Math.atan2(ax-m.position.x, az-m.position.z);
+      } else if(!tgt && s.t<=0){
         if(Math.random()<0.3){ s.spin=1.1; } else { s.ang+=rand(-1.4,1.4); }
         s.t=rand(3,6.5);
       }
-      const sp=0.85;
+      const sp=tgt?1.25:0.85;                    // he hustles when he senses a spill
       let nx=m.position.x+Math.sin(s.ang)*sp*dt, nz=m.position.z+Math.cos(s.ang)*sp*dt;
       [nx,nz]=WORLD.collide(nx,nz,0.55);
       if(nz>5.4 && nx>9 && nx<13.2){ s.shy=0.9; s.ang+=Math.PI; SFX.play("boing",nx,nz); }
       nx=clamp(nx,4.3,19.9); nz=clamp(nz,-8.2,6.0);
-      if(Math.hypot(nx-m.position.x,nz-m.position.z)<sp*dt*0.3) s.ang+=rand(1.2,2.4);
+      /* stuck on the bar or a wall → sidestep for a beat; COMMIT to a side so he
+         wall-follows around obstacles instead of ping-ponging */
+      if(Math.hypot(nx-m.position.x,nz-m.position.z)<sp*dt*0.3){
+        s.detour=rand(0.9,1.7);
+        if(!s.detSide || Math.random()<0.15) s.detSide=pick([1,-1]);
+        s.ang+=s.detSide*Math.PI/2+rand(-0.2,0.2);
+      }
       m.position.x=nx; m.position.z=nz;
       m.rotation.y=damp(m.rotation.y,s.ang,6,dt);
     }
@@ -58713,6 +58789,158 @@ HOMESTEAD.machinesUpdate = function(dt){
   /* the cold room breathes */
   if(M.coldroom && Math.random()<dt*0.7){
     puff(rand(-1,1),1.1,-9.9,0xe8f4f8,0.4,0.35,1.6);
+  }
+};
+
+/* ============================================================
+   SPILLS, SLIPS & THE MOP — bible §7, at last.
+   Truth lives in G_STATE.puddles [{x,z,r,k}] (saved with the game);
+   meshes are a parallel view rebuilt on every newday/load.
+   Moppy finally has his real job.
+   ============================================================ */
+
+HOMESTEAD.puddleMeshes=[];
+HOMESTEAD.slipCD=0; HOMESTEAD.slipToastCD=0;
+
+const PUDDLE_COL={ beer:0xc98a3a, wort:0xc9a86a, water:0x9fc8e0 };
+
+/* pub/shack/wings floors sit at ~0.3; everything else on the terrain */
+function floorTopAt(x,z){
+  const on=(x1,z1,x2,z2)=> x>x1&&x<x2&&z>z1&&z<z2;
+  if(on(-19.5,-9,-3.5,5) || on(3.5,-9,20.5,6.5) || on(20.5,-9,28.5,6.5)) return 0.315;
+  return WORLD.getH(x,z)+0.03;
+}
+
+function puddleMesh(p){
+  const m=new THREE.Mesh(geoGet("puddle",()=>new THREE.CircleGeometry(1,14)),
+    new THREE.MeshStandardMaterial({ color:PUDDLE_COL[p.k]||PUDDLE_COL.beer,
+      transparent:true, opacity:0.72, roughness:0.15, depthWrite:false,
+      polygonOffset:true, polygonOffsetFactor:-4, polygonOffsetUnits:-4 }));
+  m.rotation.x=-Math.PI/2;
+  m.scale.setScalar(p.r);
+  m.position.set(p.x, floorTopAt(p.x,p.z), p.z);
+  m.renderOrder=5;
+  return m;
+}
+
+HOMESTEAD.spill = function(x,z,r,kind){
+  if(!G_STATE) return;
+  if(!G_STATE.puddles) G_STATE.puddles=[];
+  if(G_STATE.puddles.length>=12) return;                 // the floor can only hold so much
+  const p={x:Math.round(x*10)/10, z:Math.round(z*10)/10, r:Math.round(r*100)/100, k:kind||"beer"};
+  G_STATE.puddles.push(p);
+  const m=puddleMesh(p);
+  WORLD.scene.add(m);
+  HOMESTEAD.puddleMeshes.push(m);
+  puff(x,0.5,z,PUDDLE_COL[p.k]||0xc98a3a,0.22,0.5,0.6);
+};
+
+HOMESTEAD.mopUp = function(idx, quiet){
+  const m=HOMESTEAD.puddleMeshes[idx];
+  if(m && m.parent) m.parent.remove(m);
+  HOMESTEAD.puddleMeshes.splice(idx,1);
+  G_STATE.puddles.splice(idx,1);
+  G_STATE.stats.mopped=(G_STATE.stats.mopped||0)+1;
+  if(!quiet && Math.random()<0.3)
+    toast(pick(["floor: mopped. dignity: intact.","squeaky-ish.","the boards thank ya."]),"",1500);
+};
+
+HOMESTEAD.rebuildPuddles = function(){
+  for(const m of HOMESTEAD.puddleMeshes) if(m.parent) m.parent.remove(m);
+  HOMESTEAD.puddleMeshes=[];
+  if(!G_STATE || !G_STATE.puddles) return;
+  for(const p of G_STATE.puddles){
+    const m=puddleMesh(p);
+    WORLD.scene.add(m);
+    HOMESTEAD.puddleMeshes.push(m);
+  }
+};
+
+/* the mop lives by the trough — if it ever goes missing, a new one appears at dawn */
+HOMESTEAD.ensureMop = function(){
+  const P=MAIN.player;
+  const have=ITEMS.list.some(i=>i.kind==="mop") || (P && P.carry && P.carry.kind==="mop");
+  if(!have) spawnItem("mop", -7.0, 8.6, {});
+};
+
+HOMESTEAD.nearPuddle = function(){
+  const P=MAIN.player; if(!P || !G_STATE || !G_STATE.puddles) return null;
+  let best=null, bd=1.35*1.35;
+  G_STATE.puddles.forEach((p,i)=>{
+    const d=dist2(P.x,P.z,p.x,p.z);
+    if(d<bd){ bd=d; best={x:p.x,z:p.z,i}; }
+  });
+  return best;
+};
+
+HOMESTEAD.spillsSetup = function(){
+  WORLD.addStation({ id:"mopspill",
+    get x(){ const p=HOMESTEAD.nearPuddle(); return p?p.x:9999; },
+    get z(){ const p=HOMESTEAD.nearPuddle(); return p?p.z:9999; },
+    r:1.35,
+    prompt(c){
+      if(!c.carried || c.carried.kind!=="mop") return null;
+      return HOMESTEAD.nearPuddle()? "🧹 Mop the spill" : null;
+    },
+    action(c){
+      const p=HOMESTEAD.nearPuddle(); if(!p) return;
+      MAIN.player.squash=0.3;
+      SFX.play("squelch",p.x,p.z);
+      for(let i=0;i<4;i++) puff(p.x+rand(-.3,.3),0.5,p.z+rand(-.3,.3),0xe8e0cc,0.18,0.7,0.6);
+      HOMESTEAD.mopUp(p.i);
+    }
+  });
+  BUS.on("newday", ()=>{ HOMESTEAD.rebuildPuddles(); HOMESTEAD.ensureMop(); });
+};
+
+/* slips + drunk stumble-spills + Moppy's true calling — called from update() */
+HOMESTEAD.spillsUpdate = function(dt){
+  const P=MAIN.player;
+  HOMESTEAD.slipCD=Math.max(0,HOMESTEAD.slipCD-dt);
+  HOMESTEAD.slipToastCD=Math.max(0,HOMESTEAD.slipToastCD-dt);
+  if(!G_STATE.puddles || !G_STATE.puddles.length){ /* nothing on the floor */ }
+  else {
+    /* the goober slips */
+    if(MAIN.mode==="walk" && P.speedNow>2.2 && HOMESTEAD.slipCD<=0){
+      for(const p of G_STATE.puddles){
+        if(dist2(P.x,P.z,p.x,p.z) < (p.r*0.9)*(p.r*0.9)){
+          HOMESTEAD.slipCD=2.5;
+          P.squash=0.45; P.facing+=rand(-1.4,1.4);
+          P.vx*=1.7; P.vz*=1.7;
+          SFX.play("boing",P.x,P.z);
+          if(P.carry && P.carry.kind!=="mop") MAIN.dropCarry(true);   // holding the mop = holding the solution
+          if(HOMESTEAD.slipToastCD<=0){ HOMESTEAD.slipToastCD=6; toast("🫗 WHOA— (somebody oughta mop)","bad",1600); }
+          break;
+        }
+      }
+    }
+    /* customers slip too */
+    for(const c of PUB.customers){
+      c.slipCD=Math.max(0,(c.slipCD||0)-dt);
+      const r=c.rig;
+      if(c.slipCD>0 || r.speedNow<1) continue;
+      for(const p of G_STATE.puddles){
+        if(dist2(r.x,r.z,p.x,p.z) < (p.r*0.9)*(p.r*0.9)){
+          c.slipCD=3;
+          r.squash=0.5;
+          SFX.play("boing",r.x,r.z);
+          if(Math.random()<0.4) UI.bubbleRig(r, pick(["WHOA","who MOPS around here?!","the floor moved","wheee"]), 1600);
+          break;
+        }
+      }
+    }
+  }
+  /* drunk leavers slosh their last inch of beer */
+  for(const c of PUB.customers){
+    if(c.state==="leave" && c.drunk>=2 && !c._spilled){
+      const r=c.rig;
+      const inPub= r.x>4&&r.x<20&&r.z>-8.5&&r.z<6.2;
+      if(inPub && Math.random()<dt*0.5){
+        c._spilled=true;
+        HOMESTEAD.spill(r.x, r.z, rand(0.4,0.55), "beer");
+        r.squash=0.3;
+      }
+    }
   }
 };
 

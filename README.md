@@ -1,9 +1,30 @@
-# HOME BREW — dev notes (v0.7, content-complete campaign)
+# HOME BREW — dev notes (v0.8, content-complete campaign)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v0.8 — SPILLS, SLIPS & THE MOP (bible §7) + more boil chaos
+
+- 🫗 **Spills persist until mopped.** Truth in `G_STATE.puddles` (rides the save;
+  meshes rebuilt each dawn/load). Sources: customer sip-slosh, drunk leavers,
+  foam-overs, THE LID, Splashy overspray. Cap 12. Decals use `polygonOffset`,
+  never a raised y (the Toy Box contact-shadow lesson).
+- 🛝 **Slips are physics events.** Run through a puddle: the goober squashes,
+  spins, slides ×1.7, and THROWS whatever he's carrying (unless it's the mop —
+  holding the mop is holding the solution). Customers slip too, with bubbles
+  ("who MOPS around here?!"). 2.5s cooldown, toast throttled.
+- 🧹 **The mop is a held tool with terrible reach** (station r 1.35). Lives by
+  the trough; if it ever goes missing a new one appears at dawn. `stats.mopped`.
+- 🤖 **Moppy's true calling**: he seeks pub spills (hustles at 1.25), routes
+  around the bar via a west-gate lane, wall-follows with COMMITTED detour sides
+  (random sides ping-pong forever — measured), and dings when he eats one.
+  Verified 5/5 spills cleaned from every corner, both sides of the bar.
+- 🔥 **Three new boil events**: 🐿️ squirrel steals a log (heat crashes — feed!),
+  🍿 popcorn kernel (jittery pops), 👃 Hollow Joe sniff-test (hold BOTH bands
+  while he watches → +$15). Storms now crack ⚡ thunder mid-boil (pressure jolt).
+- Fermenter prompts show "N kegs' worth in there!" on Bertha batches.
 
 ## New in v0.7 — THE FULL MACHINE ROSTER (bible §14 complete)
 
