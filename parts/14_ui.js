@@ -74,7 +74,10 @@ UI.hud = function(){
 UI.hudClock = function(){
   const ph=CYCLE.phase;
   const icons={morning:"🌄",afternoon:"☀️",evening:"🌆",night:"🌙"};
-  const txt=`Day ${G_STATE.day} · <span class="ph">${icons[ph]} ${ph[0].toUpperCase()+ph.slice(1)}</span>`;
+  let season="";
+  if(typeof SEASONS!=="undefined" && DATA.SEASONS[SEASONS.current])
+    season=` · <span class="ph">${DATA.SEASONS[SEASONS.current].icon} ${DATA.SEASONS[SEASONS.current].label}</span>`;
+  const txt=`Day ${G_STATE.day} · <span class="ph">${icons[ph]} ${ph[0].toUpperCase()+ph.slice(1)}</span>${season}`;
   if(UI.lastHud!==txt){ $("hud-day").innerHTML=txt; UI.lastHud=txt; }
 };
 

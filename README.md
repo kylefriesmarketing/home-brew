@@ -1,9 +1,46 @@
-# HOME BREW — dev notes (v1.1, content-complete campaign)
+# HOME BREW — dev notes (v1.2, content-complete campaign)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v1.2 — DISCOVERABILITY + a hardening sweep (`22_tips.js`)
+
+**The problem measured, not guessed**: `DATA.OBJECTIVES` stops at day 2, and
+`evergreen()` only mentions rank/legendaries/loan/bear/storm/leaf. Eight systems
+shipped after that tutorial ends — a player could finish the campaign never
+finding the rocker or MawMaw's stand. (Age of Toys lesson: when a deep game
+feels shallow, the gap is DISCOVERABILITY, not mechanics.)
+
+- 💡 **Contextual tips** (`22_tips.js`): 10 one-time nudges that fire only when
+  the board has just demonstrated why the thing exists — bare shelves → the farm
+  stand; a dead afternoon → the rocker; 2 spills and you've never mopped → the
+  mop; first plaque → the Brag Board; a filled keg at night → the Bottling Line;
+  first frost → winter runs the fire hungry; Bob/Joe walking in → what they do;
+  6 brews with no discoveries → the Legendary hint. Once each **ever**
+  (`homebrew-tips-seen`), 45s lockout, silent on days 1–2 and inside any menu or
+  the boil. **Every predicate is try/catch'd** — verified by injecting a
+  deliberately throwing tip: 0 errors, match unaffected.
+- 🗓️ **Season chip in the HUD** (`Day 11 · ☀️ Afternoon · ❄️ Winter`) + a Brag
+  Board line in the evergreen objectives, so both new systems are visible.
+
+### Hardening sweep (no changes needed — documented so nobody "fixes" it twice)
+- All 16 machines installed at once + winter + spills + rocker time-skip:
+  0 errors, silo→boil→cold-room→Bertha→filler-line chain end-to-end, winter heat
+  drift exactly `0.55×0.11×1.18 = 0.0714` as designed.
+- Crowded pub (Bob + Copperhead + Joe + 6 regulars + Moppy + cat + spills): 0
+  errors, PUFFS pool peaked 11/90 — no starvation.
+- Save round-trip with everything (16 machines, 3 fermenters, 5 puddles, brags,
+  hat, wings, season): every field identical, plaques and puddle meshes rebuilt.
+- ⚠️ **INVESTIGATED AND NOT A BUG**: `CYCLE.save()` runs BEFORE the `newday`
+  emit in `finishSleep`, and `CYCLE.load()` re-emits `newday` — so a save holds
+  a pre-payout Bottling Line keg and reloading re-runs the overnight handlers.
+  It looks like an infinite-money exploit and **is not**: the saved cash is also
+  pre-payout, so every reload lands on the identical total ($9,343 twice,
+  measured). Saves are only written at sleep, so it can never accumulate.
+  **Don't "fix" the ordering** — it's self-consistent, and moving the save would
+  break the crate-delivery resume.
 
 ## New in v1.1 — SEASONS, THE BRAG BOARD & COPPERHEAD COMES AROUND (`21_seasons.js`)
 

@@ -172,6 +172,10 @@ CYCLE.evergreen = function(){
   else list.push({id:"king",txt:`👑 Best in the World. The mountain is yours — brew weird.`,done:false});
   const undisc=DATA.LEGENDARIES.filter(l=>!G_STATE.discovered[l.key]).length;
   if(undisc) list.push({id:"disc",txt:`Legendary brews undiscovered: ${undisc} (Hollow Joe knows things)`,done:false});
+  if(typeof DATA.BRAGS!=="undefined"){
+    const got=Object.keys(G_STATE.brags||{}).length;
+    if(got<DATA.BRAGS.length) list.push({id:"brag",txt:`🏆 Brag Board: ${got}/${DATA.BRAGS.length} plaques hung`,done:false});
+  }
   if(G_STATE.loan) list.push({id:"loan",txt:`Pay off Copperhead (${fmt$(G_STATE.loan.bal)})`,done:false});
   if(G_STATE.spentGrain>=DATA.TUNE.bearAt) list.push({id:"bear",txt:`🐻 EMPTY THE DUMPSTER before the Boys come back`,done:false});
   if(G_STATE.weather==="storm") list.push({id:"storm",txt:`⛈️ Storm day — expect a MEAN boil and maybe a blackout`,done:false});
