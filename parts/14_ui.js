@@ -188,12 +188,23 @@ UI.priceDialog = function(i){
     const sass = T.price<=T.beer.suggest*0.6? "practically charity" :
       T.price<=T.beer.suggest*1.15? "fair mountain price" :
       T.price<=T.beer.suggest*1.8? "tourist pricing 👀" : "highway robbery (they WILL notice)";
+    /* who'll actually drink it — read straight off the sim's own appetite math */
+    const who=[["local","🧢 Locals"],["tourist","📷 Tourists"],["hiker","🥾 Hikers"]].map(([k,label])=>{
+      const yes=PUB.willBuy(T.beer, T.price, k);
+      return `<span style="opacity:${yes?1:0.38}">${yes?"✅":"❌"} ${label}</span>`;
+    }).join(" &nbsp; ");
+    const locals=PUB.willBuy(T.beer,T.price,"local");
+    const note = locals
+      ? "Locals drink here — they tip small but they <b>talk</b> (fame ×1.4)."
+      : "Priced for passers-through. Tourists pay it; the regulars walk.";
     return `<h1>🏷️ “${T.beer.name}”</h1>
       <div class="sub">${T.beer.tierName} · suggested $${T.beer.suggest}</div><hr class="chalkline">
       <div style="text-align:center;font-size:40px;margin:8px"><span class="btn clickable" id="pm">−</span>
       <span class="pricetag" style="font-size:34px;margin:0 14px">$${T.price}</span>
       <span class="btn clickable" id="pp">+</span></div>
       <p style="text-align:center" class="sub">${sass}</p>
+      <p style="text-align:center;font-size:15px">${who}</p>
+      <p style="text-align:center" class="sub">${note}</p>
       <div style="text-align:center"><span class="btn clickable" id="pd-ok">nail it to the tap</span></div>`;
   };
   const o=UI.open(render());

@@ -154,7 +154,7 @@ kbd{background:#3a3128;color:#ffd98a;border-radius:4px;border:1px solid #6b4a2f;
     <div class="credit">a Dirty Boy Devs joint · The Room</div>
   </div>
   <div class="bigfade" id="fade"></div>
-  <div id="verchip">home brew v1.2</div>
+  <div id="verchip">home brew v1.3</div>
 </div>
 <script>
 (function(){
@@ -53374,7 +53374,11 @@ DATA.TIERS = [
   { key:"decent", name:"Decent", min:1.2, col:"#c9c26a", price:3 },
   { key:"good",   name:"Good",   min:2.2, col:"#e8a33d", price:5 },
   { key:"great",  name:"Great",  min:3.2, col:"#e86a3d", price:8 },
-  { key:"legend", name:"LEGENDARY", min:4.2, col:"#ffd98a", price:14 },
+  /* ⚠️ legend was 14 — MEASURED (n=4 evenings/cell) as the worst price in the
+     game: $86 gross vs $133 at $10 and $142 at $6, and a QUARTER of what a
+     Great earns at its own tag. $10 keeps it a premium tourist price while
+     restoring "best beer = best money". See README's balance battery. */
+  { key:"legend", name:"LEGENDARY", min:4.2, col:"#ffd98a", price:10 },
 ];
 
 /* ---- beer name generator ---- */
@@ -55819,20 +55823,32 @@ PUB.spawnCustomer = function(type){
   return c;
 };
 
+/* the ONE appetite formula — the sim and the price tag both read it, so the
+   readout can never drift from what customers actually do */
+PUB.appeal = function(beer, price, type){
+  if(type==="joe"){
+    const cursedIng=beer.ing.some(t=>DATA.INGREDIENTS[t].cursed);
+    return (beer.axes.w>=2||cursedIng||beer.legendary) ? 10 : -1;
+  }
+  const def=DATA.CUSTOMERS[type]||DATA.CUSTOMERS.local;
+  let v = beer.score*1.35 - price*def.sense;
+  if(beer.legendary) v+=2.2;
+  return v;
+};
+/* would a typical one buy? (the +0.15 is the mean of the rand spread below) */
+PUB.willBuy = function(beer, price, type){
+  const def=DATA.CUSTOMERS[type]||DATA.CUSTOMERS.local;
+  if(price>def.wallet) return false;
+  return PUB.appeal(beer,price,type)+0.15 > 0.2;
+};
+
 PUB.chooseTap = function(c){
   let best=-1, bv=0.2;
   for(let i=0;i<2;i++){
     const T=G_STATE.taps[i];
     if(!T.beer||T.pints<=0) continue;
     if(T.price>c.wallet) continue;
-    let v;
-    if(c.type==="joe"){
-      const cursedIng=T.beer.ing.some(t=>DATA.INGREDIENTS[t].cursed);
-      v = (T.beer.axes.w>=2||cursedIng||T.beer.legendary) ? 10 : -1;
-    } else {
-      v = T.beer.score*1.35 - T.price*c.def.sense + rand(-0.5,0.8);
-      if(T.beer.legendary) v+=2.2;
-    }
+    const v = PUB.appeal(T.beer, T.price, c.type) + (c.type==="joe"?0:rand(-0.5,0.8));
     if(v>bv){ bv=v; best=i; }
   }
   return best;
@@ -57135,12 +57151,23 @@ UI.priceDialog = function(i){
     const sass = T.price<=T.beer.suggest*0.6? "practically charity" :
       T.price<=T.beer.suggest*1.15? "fair mountain price" :
       T.price<=T.beer.suggest*1.8? "tourist pricing 👀" : "highway robbery (they WILL notice)";
+    /* who'll actually drink it — read straight off the sim's own appetite math */
+    const who=[["local","🧢 Locals"],["tourist","📷 Tourists"],["hiker","🥾 Hikers"]].map(([k,label])=>{
+      const yes=PUB.willBuy(T.beer, T.price, k);
+      return `<span style="opacity:${yes?1:0.38}">${yes?"✅":"❌"} ${label}</span>`;
+    }).join(" &nbsp; ");
+    const locals=PUB.willBuy(T.beer,T.price,"local");
+    const note = locals
+      ? "Locals drink here — they tip small but they <b>talk</b> (fame ×1.4)."
+      : "Priced for passers-through. Tourists pay it; the regulars walk.";
     return `<h1>🏷️ “${T.beer.name}”</h1>
       <div class="sub">${T.beer.tierName} · suggested $${T.beer.suggest}</div><hr class="chalkline">
       <div style="text-align:center;font-size:40px;margin:8px"><span class="btn clickable" id="pm">−</span>
       <span class="pricetag" style="font-size:34px;margin:0 14px">$${T.price}</span>
       <span class="btn clickable" id="pp">+</span></div>
       <p style="text-align:center" class="sub">${sass}</p>
+      <p style="text-align:center;font-size:15px">${who}</p>
+      <p style="text-align:center" class="sub">${note}</p>
       <div style="text-align:center"><span class="btn clickable" id="pd-ok">nail it to the tap</span></div>`;
   };
   const o=UI.open(render());

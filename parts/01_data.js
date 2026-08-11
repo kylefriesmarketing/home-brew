@@ -166,7 +166,11 @@ DATA.TIERS = [
   { key:"decent", name:"Decent", min:1.2, col:"#c9c26a", price:3 },
   { key:"good",   name:"Good",   min:2.2, col:"#e8a33d", price:5 },
   { key:"great",  name:"Great",  min:3.2, col:"#e86a3d", price:8 },
-  { key:"legend", name:"LEGENDARY", min:4.2, col:"#ffd98a", price:14 },
+  /* ⚠️ legend was 14 — MEASURED (n=4 evenings/cell) as the worst price in the
+     game: $86 gross vs $133 at $10 and $142 at $6, and a QUARTER of what a
+     Great earns at its own tag. $10 keeps it a premium tourist price while
+     restoring "best beer = best money". See README's balance battery. */
+  { key:"legend", name:"LEGENDARY", min:4.2, col:"#ffd98a", price:10 },
 ];
 
 /* ---- beer name generator ---- */

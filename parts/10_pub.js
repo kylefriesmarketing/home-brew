@@ -145,20 +145,32 @@ PUB.spawnCustomer = function(type){
   return c;
 };
 
+/* the ONE appetite formula — the sim and the price tag both read it, so the
+   readout can never drift from what customers actually do */
+PUB.appeal = function(beer, price, type){
+  if(type==="joe"){
+    const cursedIng=beer.ing.some(t=>DATA.INGREDIENTS[t].cursed);
+    return (beer.axes.w>=2||cursedIng||beer.legendary) ? 10 : -1;
+  }
+  const def=DATA.CUSTOMERS[type]||DATA.CUSTOMERS.local;
+  let v = beer.score*1.35 - price*def.sense;
+  if(beer.legendary) v+=2.2;
+  return v;
+};
+/* would a typical one buy? (the +0.15 is the mean of the rand spread below) */
+PUB.willBuy = function(beer, price, type){
+  const def=DATA.CUSTOMERS[type]||DATA.CUSTOMERS.local;
+  if(price>def.wallet) return false;
+  return PUB.appeal(beer,price,type)+0.15 > 0.2;
+};
+
 PUB.chooseTap = function(c){
   let best=-1, bv=0.2;
   for(let i=0;i<2;i++){
     const T=G_STATE.taps[i];
     if(!T.beer||T.pints<=0) continue;
     if(T.price>c.wallet) continue;
-    let v;
-    if(c.type==="joe"){
-      const cursedIng=T.beer.ing.some(t=>DATA.INGREDIENTS[t].cursed);
-      v = (T.beer.axes.w>=2||cursedIng||T.beer.legendary) ? 10 : -1;
-    } else {
-      v = T.beer.score*1.35 - T.price*c.def.sense + rand(-0.5,0.8);
-      if(T.beer.legendary) v+=2.2;
-    }
+    const v = PUB.appeal(T.beer, T.price, c.type) + (c.type==="joe"?0:rand(-0.5,0.8));
     if(v>bv){ bv=v; best=i; }
   }
   return best;

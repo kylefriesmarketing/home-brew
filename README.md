@@ -1,9 +1,49 @@
-# HOME BREW — dev notes (v1.2, content-complete campaign)
+# HOME BREW — dev notes (v1.3, content-complete campaign)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v1.3 — THE BALANCE BATTERY (the pricing feel-check, measured)
+
+The old note said *"prices vs local wallets needs a feel-check."* It got one —
+headlessly. `__EVE2(tier, price, fame)` runs one controlled evening (fame pinned
+so spawn rate is constant, self-pour on to remove player skill, wings off to
+isolate BEER economics) and reports arrivals/buyers/gross/fame by customer type.
+`__AVG(tier, price, n)` repeats it. **n=4 evenings per cell** — single evenings
+are far too noisy to conclude from ($14 gave $27 in one run and $124 in another).
+
+**Finding 1 — the tag price is a TOURIST price, at every tier.** At each tier's
+own suggested price, **zero locals buy. Every tier.** That's coherent design
+(locals `sense` 1.2 vs tourists 0.6) but it was completely invisible.
+
+**Finding 2 — LEGENDARY @ $14 was the worst price in the game.** Measured:
+
+| Legendary price | gross | fame | buy rate | locals |
+|---|---|---|---|---|
+| $6  | **$142** | **+68** | 91% | 89% |
+| $10 | $133 | +27 | 46% | 0% |
+| $12 | $100 | +15 | 33% | 0% |
+| $14 *(old tag)* | **$86** | +10 | 28% | 0% |
+| $16 | $0 | −6 | 0% | 0% |
+
+A Great beer at its own tag earned **$100**. Brewing the best beer in the game
+and pricing it as instructed earned **$86** — the progression fantasy inverted.
+**Fix: legend tag $14 → $10**, which keeps it a premium tourist price while
+restoring "best beer = best money". (The fame→spawn-rate loop is why cheap wins
+so hard: a happy cheap night snowballs into more customers.)
+
+**Fix 2 — make the trade-off legible instead of invisible.** The appetite math
+now lives in **one** place, `PUB.appeal(beer, price, type)` + `PUB.willBuy(...)`,
+read by BOTH `chooseTap` and the price tag — they can never drift. The price
+dialog now shows ✅/❌ per customer type live as you turn the dial:
+- $6 → `✅ Locals ✅ Tourists ✅ Hikers` · *"they tip small but they **talk** (fame ×1.4)"*
+- $10 → `❌ Locals ✅ Tourists ✅ Hikers` · *"Priced for passers-through. The regulars walk."*
+
+⚠️ The refactor is **behavior-neutral** — verified by re-running the same battery
+cells before/after (buy rates 91/46/92% → 91/51/91%, locals 89/0/94% → 100/0/85%).
+⚠️ Don't conclude anything from a single evening. Use `__AVG` with n≥4.
 
 ## New in v1.2 — DISCOVERABILITY + a hardening sweep (`22_tips.js`)
 
