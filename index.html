@@ -154,7 +154,7 @@ kbd{background:#3a3128;color:#ffd98a;border-radius:4px;border:1px solid #6b4a2f;
     <div class="credit">a Dirty Boy Devs joint · The Room</div>
   </div>
   <div class="bigfade" id="fade"></div>
-  <div id="verchip">home brew v1.5</div>
+  <div id="verchip">home brew v1.6</div>
 </div>
 <script>
 (function(){
@@ -53242,6 +53242,34 @@ DATA.INGREDIENTS = {
   jar:       { name:"Copperhead's Mystery Jar", cost:0, s:1,b:1,f:2,w:3, cursed:true, secret:true, look:"jar", col:0xd8d2b0 },
 };
 
+/* ============================================================================
+   BEER STYLES — the M2 restructure (Potionomics' solution to our exact problem).
+   The RATIO between sweet/bitter/funky/weird decides WHICH BEER YOU MADE.
+   The TOTAL intensity decides HOW GOOD it is.
+
+   Before this, four authored axes were crushed into one scalar and customers
+   read only that scalar — so there was exactly one correct beer (coffee+honey)
+   from day 6 onward and the whole 16-ingredient pantry was a menu with one
+   right answer. Two orthogonal readings of the same vector fixes it: there is
+   no "more is better" direction any more, only "closer to a style", and
+   over-pouring your dominant axis drags you off-ratio into mud.
+
+   `mix` is the TARGET RATIO (s,b,f,w). Purity = cosine similarity to it.
+   ============================================================================ */
+DATA.STYLES = [
+  { key:"lager",  name:"Lager",      mix:[0.40,0.40,0.20,0.00], blurb:"clean, honest, unremarkable in the best way" },
+  { key:"amber",  name:"Amber Ale",  mix:[0.50,0.45,0.05,0.00], blurb:"the handshake of beers" },
+  { key:"ipa",    name:"IPA",        mix:[0.12,0.80,0.08,0.00], blurb:"bitter enough to argue with" },
+  { key:"stout",  name:"Stout",      mix:[0.10,0.65,0.25,0.00], blurb:"roasty, dark, sits in the chest" },
+  { key:"porter", name:"Porter",     mix:[0.35,0.55,0.10,0.00], blurb:"sweet up front, bitter on the way out" },
+  { key:"honey",  name:"Honey Ale",  mix:[0.80,0.12,0.08,0.00], blurb:"pure sunshine, dangerous at noon" },
+  { key:"fruit",  name:"Fruit Beer", mix:[0.62,0.08,0.30,0.00], blurb:"orchard in a glass" },
+  { key:"saison", name:"Saison",     mix:[0.20,0.18,0.62,0.00], blurb:"farmhouse funk, barn-adjacent" },
+  { key:"sour",   name:"Sour",       mix:[0.42,0.05,0.53,0.00], blurb:"puckers first, forgives later" },
+  { key:"gose",   name:"Gose",       mix:[0.26,0.20,0.30,0.24], blurb:"salty, strange, weirdly moreish" },
+  { key:"curio",  name:"Curiosity",  mix:[0.14,0.14,0.20,0.52], blurb:"you made this on purpose. allegedly." },
+];
+
 /* ---- the 12 Legendary recipes: ing = sorted multiset of NON-barley items ---- */
 DATA.LEGENDARIES = [
   { key:"trout",   name:"Trout Stout",        ing:["coffee","fish"],        water:"crick",  hint:"Somethin' fishy'd sit real nice in somethin' muddy… with a jolt of black mornin' juice." },
@@ -53373,16 +53401,20 @@ DATA.RANKS = [
 ];
 
 /* ---- quality tiers ---- */
+/* ⚠️ M2 RECALIBRATION: these minimums were tuned against the OLD one-scalar
+   potential curve. Under ratio→style the scores sit higher, and at the old
+   thresholds **83% of all 1,139 combos reached "LEGENDARY" tier** — which
+   destroys the word. Re-derived from the measured distribution. */
 DATA.TIERS = [
   { key:"swill",  name:"Swill",  min:0,   col:"#8a9a6a", price:1.5 },
-  { key:"decent", name:"Decent", min:1.2, col:"#c9c26a", price:3 },
-  { key:"good",   name:"Good",   min:2.2, col:"#e8a33d", price:5 },
-  { key:"great",  name:"Great",  min:3.2, col:"#e86a3d", price:8 },
+  { key:"decent", name:"Decent", min:1.5, col:"#c9c26a", price:3 },
+  { key:"good",   name:"Good",   min:2.7, col:"#e8a33d", price:5 },
+  { key:"great",  name:"Great",  min:4.0, col:"#e86a3d", price:8 },
   /* ⚠️ legend was 14 — MEASURED (n=4 evenings/cell) as the worst price in the
      game: $86 gross vs $133 at $10 and $142 at $6, and a QUARTER of what a
      Great earns at its own tag. $10 keeps it a premium tourist price while
      restoring "best beer = best money". See README's balance battery. */
-  { key:"legend", name:"LEGENDARY", min:4.2, col:"#ffd98a", price:10 },
+  { key:"legend", name:"LEGENDARY", min:5.3, col:"#ffd98a", price:10 },
 ];
 
 /* ---- beer name generator ---- */
@@ -53461,7 +53493,7 @@ DATA.TAGLINES = [
 DATA.TUNE = {
   startCash: 60,
   phaseLen: { morning: 115, afternoon: 135, evening: 170 },
-  legendBonus: 0.8,                 // a Legendary always beats the same brew without it
+  legendBonus: 1.0,                 // a Legendary always beats the best generic on that water
   rockScale: 7,                     // porch rocker time speed-up
   standMarkup: 1.75,                // MawMaw's farm-stand convenience surcharge
   standKegPrice: 26,                // her one spare keg (catalog: 15. she knows.)
@@ -55401,19 +55433,49 @@ const BREW = {
 };
 
 /* ---------- quality math ---------- */
+/* which style does this flavour VECTOR point at, and how cleanly?
+   purity = cosine similarity to the style's target ratio (1 = dead on) */
+BREW.styleOf = function(axes){
+  const v=[axes.s,axes.b,axes.f,axes.w];
+  const mag=Math.hypot(v[0],v[1],v[2],v[3]);
+  if(mag<0.001) return { style:DATA.STYLES[0], purity:0.35 };      // water and a prayer
+  let best=DATA.STYLES[0], bestCos=-1;
+  for(const S of DATA.STYLES){
+    const m=S.mix, mm=Math.hypot(m[0],m[1],m[2],m[3]);
+    const cos=(v[0]*m[0]+v[1]*m[1]+v[2]*m[2]+v[3]*m[3])/(mag*mm);
+    if(cos>bestCos){ bestCos=cos; best=S; }
+  }
+  return { style:best, purity:clamp(bestCos,0,1) };
+};
+
+/* ⚠️ M2: RATIO decides the style, TOTAL decides the tier.
+   The old version summed the four axes into one scalar with hand-tuned body /
+   balance / lopsided / funk / weird terms — which produced exactly one optimal
+   recipe (coffee+honey, potential 3.98) that beat all 16 Legendaries and made
+   the whole pantry decorative. Now:
+     total   → how much beer is in the beer (needs ~9 to max out, so a strong
+               brew costs all three flavour slots)
+     purity  → how close the ratio sits to a real style; gates hard, so
+               over-pouring your dominant axis drags you off-ratio into mud
+   Water still caps the ceiling, exactly as before. */
 BREW.calcPotential = function(waterKey, ings, floaties){
   const W=DATA.WATERS[waterKey];
   let s=0,b=0,f=W.funk||0,w=0;
   for(const t of ings){ const d=DATA.INGREDIENTS[t]; s+=d.s; b+=d.b; f+=d.f; w+=d.w; }
-  let pot = 1.6;
-  pot += Math.min(s,3)*0.28 + Math.min(b,3)*0.28;                  // body
-  pot += (s>0&&b>0) ? 0.7 : 0;                                     // balance bonus
-  pot -= Math.max(0, Math.abs(s-b)-2)*0.35;                        // lopsided penalty
-  pot += clamp(f,0,2)*0.22 - Math.max(0,f-2)*0.5;                  // funk: character then ruin
-  pot -= w*0.55;                                                   // weird wrecks… usually
-  if(floaties) pot -= 0.4;
-  pot = clamp(pot, 0.6, W.cap + 0.4);
-  return { pot: Math.min(pot, W.cap+0.001), axes:{s,b,f,w} };
+  const axes={s,b,f,w};
+  const { style, purity } = BREW.styleOf(axes);
+  /* ⚠️ TUNED FOR SPREAD, measured not guessed: at total/9 and a 0.45 purity
+     floor, 69% of all 1,139 combos landed within 5% of the best — the ratio
+     system was varied in STYLE but flat in QUALITY, because almost every
+     3-ingredient brew maxed the water cap. Needing 12 total for full intensity
+     (which takes genuinely potent, often cursed ingredients) and gating harder
+     on purity spreads the field back out. */
+  const total=s+b+f+w;
+  let base=clamp(total/12, 0, 1);
+  if(floaties) base*=0.82;
+  const quality=base*(0.20+0.80*purity);
+  const pot=Math.min(0.6 + quality*(W.cap+0.4-0.6), W.cap+0.001);
+  return { pot, axes, style, purity, total };
 };
 
 BREW.checkLegendary = function(waterKey, ings){
@@ -55425,13 +55487,16 @@ BREW.checkLegendary = function(waterKey, ings){
   return null;
 };
 
-BREW.beerName = function(waterKey, ings, axes, tierKey, legendary){
+/* names now END IN THE STYLE YOU ACTUALLY BREWED — the style is the payoff of
+   the whole ratio system, so it has to be readable on the tap handle */
+BREW.beerName = function(waterKey, ings, axes, tierKey, legendary, style){
   if(legendary) return legendary.name;
   if(tierKey==="swill") return pick(DATA.NAMES.swill);
+  const styleWord = style ? style.name : pick(DATA.NAMES.styles);
   for(const t of ings){ if(DATA.NAMES.byIng[t] && Math.random()<0.75)
-    return DATA.NAMES.byIng[t]+" "+pick(DATA.NAMES.styles); }
+    return DATA.NAMES.byIng[t]+" "+styleWord; }
   const dom = Object.entries(axes).sort((a,b)=>b[1]-a[1])[0][0];
-  return pick(DATA.NAMES.byAxis[dom]||DATA.NAMES.byAxis.s)+" "+pick(DATA.NAMES.styles);
+  return pick(DATA.NAMES.byAxis[dom]||DATA.NAMES.byAxis.s)+" "+styleWord;
 };
 
 BREW.tierOf = function(score){
@@ -55899,7 +55964,7 @@ BREW.finishBoil = function(blown){
   if(b.scorched) exec=Math.min(exec,0.6);
   if(blown) exec=0.3;
   exec=clamp(exec,0.3,1.5);
-  const {pot,axes}=BREW.calcPotential(k.water,k.ings,k.floaties);
+  const {pot,axes,style,purity,total}=BREW.calcPotential(k.water,k.ings,k.floaties);
   const L=BREW.checkLegendary(k.water,k.ings);
   /* ⚠️ this used to OVERRIDE score for a Legendary: 4.6+(exec-1.15)*2, capping
      at 5.30 — while a plain coffee+honey on spring water scores pot 3.98 × 1.5
@@ -55909,15 +55974,29 @@ BREW.finishBoil = function(blown){
      raw potential is deliberately awful, still land in tier) PLUS a bonus (so a
      Legendary always beats the same brew without it, and building it out of
      good ingredients pays MORE). */
+  /* ⚠️ Water-scaling this floor was MY bug and it was severe: crick/sink/hose
+     Legendaries (trout, rampst, pawpaw, laundry, crayola, hefe — 6 of 16)
+     could never reach legend TIER, so `isLegend` stayed false and they lost
+     their name, their ★, and their DISCOVERY. A Legendary recipe transcends
+     its water — the floor is water-agnostic again.
+     The ordering instead holds by construction: LEGENDARY tier is reserved for
+     actual Legendaries. Generic brews are capped just below it, so the best
+     beer you can invent is "Great" and the top rung is earned by discovery —
+     which is what drives the whole hint system the bible is built around. */
+  const LEGEND_MIN=DATA.TIERS.find(t=>t.key==="legend").min;
   let score = pot*exec;
   if(L && exec>=1.15) score = Math.max(score, 4.6 + (exec-1.15)*2) + DATA.TUNE.legendBonus;
+  else score = Math.min(score, LEGEND_MIN-0.01);
   const tier=BREW.tierOf(score);
-  const isLegend = tier.key==="legend" && L;
+  const isLegend = !!L && exec>=1.15;      // identity, not a quality threshold
   const beer={
-    name: BREW.beerName(k.water,k.ings,axes,tier.key, isLegend?L:null),
+    name: BREW.beerName(k.water,k.ings,axes,tier.key, isLegend?L:null, style),
     tier: tier.key, tierName: tier.name, tierCol: tier.col,
     score: Math.round(score*100)/100, exec: Math.round(exec*100)/100,
     axes, ing:[...k.ings], water:k.water,
+    /* M2: style + purity ride the beer so the pub (M3) can have opinions */
+    style: style.key, styleName: style.name, styleBlurb: style.blurb,
+    purity: Math.round(purity*100)/100, total,
     legendary: isLegend? L.key : null,
     suggest: tier.price,
   };
@@ -55958,6 +56037,13 @@ BREW.taste = function(){
       toast("interesting. deeply, deeply interesting.");
     }
     else { SFX.play("burp",P.x,P.z); toast("hey now! that's got promise. *burp*"); }
+    /* M2: tell the player WHAT THEY MADE. The style is the whole point of the
+       ratio system, and purity is the feedback that teaches it. */
+    if(beer.styleName) setTimeout(()=>{
+      const pure = beer.purity>=0.97 ? "textbook" : beer.purity>=0.9 ? "solid" :
+                   beer.purity>=0.78 ? "a bit muddled" : "honestly, a mess of a";
+      toast(`🍺 That's ${pure} ${beer.styleName} — ${beer.styleBlurb}`,"",4200);
+    },1600);
   },500);
 };
 
@@ -57502,12 +57588,21 @@ UI.boilFrame = function(b){
   $("presneedle").style.transform=`rotate(${-90+b.pres*180}deg)`;
   $("stirfill").style.width=(b.stir*100)+"%";
   $("stirfill").style.background=b.stir>0.4?"var(--green)":"var(--red)";
-  $("boiltimer").textContent=`${Math.ceil(b.dur-b.t)}s — quality brewing: ${Math.round(b.good/(b.dur*0.62)*100)}%`;
+  /* the cliff between a good beer and a LEGENDARY one was a single invisible
+     number: exec = 0.3 + 1.2×q, and a Legendary needs exec ≥ 1.15 ⇒ q ≥ 71%.
+     Show the bar AND the gate, so the player can see what they're chasing. */
+  const q=b.good/(b.dur*0.62);
+  const pct=Math.round(q*100);
+  const gate=pct>=71;
+  $("boiltimer").innerHTML=`${Math.ceil(b.dur-b.t)}s — quality <b style="color:${gate?"#8fc088":"#e8a33d"}">${pct}%</b>`
+    + `<span style="opacity:.75"> · legendary needs 71%${gate?" ✓":""}</span>`;
   const ev=$("boilevent");
   if(b.eventNow){
     ev.style.display="block";
-    ev.textContent = b.eventNow.type==="foam"? `🫧 FOAM-OVER! MASH [S] ×${b.eventNow.mash}` :
-      b.eventNow.type==="bee"? "🐝 BEE. STAY CALM." : "🪵 FLOATIES! VENT!";
+    const T={ foam:`🫧 FOAM-OVER! MASH [S] ×${b.eventNow.mash}`, bee:"🐝 BEE. STAY CALM.",
+      floaties:"🪵 FLOATIES! VENT!", squirrel:"🐿️ SQUIRREL STOLE A LOG — FEED THE FIRE [F]",
+      pop:"🍿 POPCORN KERNEL — she's jumpy", sniff:"👃 JOE'S WATCHING — HOLD BOTH BANDS" };
+    ev.textContent = T[b.eventNow.type] || "🪵 FLOATIES! VENT!";
   } else ev.style.display="none";
 };
 UI.boilEnd = function(){
@@ -57737,8 +57832,20 @@ UI.brewBook = function(){
     return `<div class="row"><span class="nm">❓ ???</span><span class="sub">Hollow Joe might know…</span></div>`;
   }).join("");
   const s=G_STATE.stats;
+  /* M2: the style chart. The ratio between your four axes decides WHICH beer
+     you made — so the player needs to be able to read the map. */
+  const styles=DATA.STYLES.map(S=>{
+    const m=S.mix, dom=["sweet","bitter","funky","WEIRD"][m.indexOf(Math.max(...m))];
+    const bars=m.map((v,i)=>v>0.05?`${["s","b","f","w"][i]}${"▪".repeat(Math.max(1,Math.round(v*6)))}`:"").filter(Boolean).join(" ");
+    return `<div class="row"><span class="nm">${S.name} <span class="sub">${S.blurb}</span></span><span class="sub">${bars}</span></div>`;
+  }).join("");
   const o=UI.open(`<h1>📕 The Brew Book</h1><div class="sub">${Object.keys(G_STATE.discovered).length}/${DATA.LEGENDARIES.length} legendary recipes</div>
     <hr class="chalkline">${rows}<hr class="chalkline">
+    <h2>🍺 Styles — the ratio makes the beer</h2>
+    <p class="sub">Sweet / bitter / funky / WEIRD. The <b>balance</b> between them decides what you brewed;
+    the <b>total</b> decides how strong it lands. Pour too much of one thing and you slide off the style into mud.</p>
+    ${styles}
+    <hr class="chalkline">
     <p class="sub">batches brewed: ${s.brews||0} · pints served: ${s.served||0} · ficus incidents: ${s.ficus||0}</p>
     <div style="text-align:center"><span class="btn clickable" id="bb-x">close</span></div>`);
   o.querySelector("#bb-x").onclick=()=>UI.close();
@@ -58115,12 +58222,15 @@ window.MB = {
   /* dev/test helpers */
   phase(p){ CYCLE.phase=p; CYCLE.phaseT=0; BUS.emit("phase",p); UI.hud(); },
   brewNow(ings=["blackberry","honey"], water="spring", exec=1.3){
-    const {pot,axes}=BREW.calcPotential(water,ings,false);
+    const {pot,axes,style,purity}=BREW.calcPotential(water,ings,false);
     const L=BREW.checkLegendary(water,ings);
-    let score=L&&exec>=1.15? 4.6+(exec-1.15)*2 : (pot*exec);
+    const Wc=DATA.WATERS[water].cap;
+    let score=pot*exec;
+    if(L&&exec>=1.15) score=Math.max(score,(Wc/4)*(4.6+(exec-1.15)*2))+DATA.TUNE.legendBonus;
     const tier=BREW.tierOf(score);
-    const beer={name:BREW.beerName(water,ings,axes,tier.key,tier.key==="legend"?L:null),
+    const beer={name:BREW.beerName(water,ings,axes,tier.key,tier.key==="legend"?L:null,style),
       tier:tier.key,tierName:tier.name,tierCol:tier.col,score,exec,axes,ing:ings,water,
+      style:style.key, styleName:style.name, styleBlurb:style.blurb, purity:Math.round(purity*100)/100,
       legendary:tier.key==="legend"&&L?L.key:null,suggest:tier.price};
     const P=MAIN.player;
     const keg=spawnItem("keg",P.x+1,P.z,{state:"filled",beer,pints:DATA.TUNE.pintsPerKeg});

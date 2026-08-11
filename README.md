@@ -1,9 +1,68 @@
-# HOME BREW — dev notes (v1.5, content-complete campaign)
+# HOME BREW — dev notes (v1.6, content-complete campaign)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v1.6 — **MILESTONE 2 of 6: THE EQUATION** ✅
+
+**⚠️ SAVE-BREAKING (approved).** Beers made before v1.6 have no `style`.
+
+The problem: four authored flavour axes were crushed into one scalar, and
+`PUB.appeal` read only that scalar — so **no customer had a taste**, there was
+exactly one correct beer (coffee+honey) from day 6 onward, and the 16-ingredient
+pantry was a menu with one right answer.
+
+**The fix — ratio → style, total → tier** (Potionomics' solution to this exact
+problem). Two orthogonal readings of the same ingredient vector:
+- **`DATA.STYLES`** — 11 styles, each a target ratio: Lager, Amber, IPA, Stout,
+  Porter, Honey Ale, Fruit Beer, Saison, Sour, Gose, Curiosity. `BREW.styleOf`
+  picks the nearest by **cosine similarity**; that similarity is `purity`.
+- **`total`** (sum of all four axes) drives intensity — needing **12** for full
+  strength, so a big beer costs all three flavour slots and usually wants the
+  potent/cursed shelf. `quality = base × (0.20 + 0.80 × purity)`.
+- Weird is finally a **real axis with its own styles** instead of a flat
+  penalty, which is what makes the cursed shelf interesting rather than just bad.
+
+**Measured across all 1,139 one-to-three-ingredient combos × 5 waters:**
+- The old dominant coffee+honey is now a *textbook Amber Ale* scoring **3.74**,
+  ranked ~1021st. **The dominant recipe is dead.**
+- 9 distinct styles in the top 40 — it's a design space now.
+- **Execution became the dominant lever**, which is the whole point:
+
+| Play quality | Legendary | Great | Good | Decent/Swill |
+|---|---|---|---|---|
+| Perfect (1.5) | 51% | 36% | 11% | 1% |
+| Typical (1.15) | 0.4% | 52% | 41% | 6% |
+| Sloppy (0.8) | 0% | 0% | 60% | 40% |
+
+**⚠️ Two tuning traps hit and fixed, both caught by measuring not guessing:**
+1. At `total/9` + a 0.45 purity floor, **69% of all combos landed within 5% of
+   the best** — varied in style, flat in quality, because nearly every
+   3-ingredient brew maxed the water cap. Retuned to `total/12` + a 0.20 floor.
+2. At the old tier minimums, **83% of combos reached "LEGENDARY" tier**, which
+   destroys the word. Minimums re-derived from the measured distribution
+   (decent 1.5 / good 2.7 / great 4.0 / legend 5.3).
+
+**⚠️ And a severe bug of my own making:** water-scaling the Legendary floor meant
+crick/sink/hose recipes (trout, rampst, pawpaw, laundry, crayola, hefe — **6 of
+16**) could never reach legend tier, so `isLegend` stayed false and they silently
+lost their name, their ★ and their **discovery**. The floor is water-agnostic
+again, and `isLegend` is now **identity, not a quality threshold**. Ordering
+instead holds by construction: **LEGENDARY tier is reserved for actual
+Legendaries** — generics are capped just below it, so the best beer you can
+*invent* is "Great" and the top rung is earned by *discovery*, which is exactly
+what the bible's hint system exists to drive.
+**Verified: 15/15 Legendaries recognised, 0 generics reach legend tier.**
+
+- 🍺 Beer names now end in the style you actually brewed ("Syrupy Amber Ale").
+- 👅 Tasting the wort tells you the style and how clean the ratio was
+  (*"textbook / solid / a bit muddled / honestly, a mess of a"*).
+- 📕 The Brew Book gained a **style chart** — all 11 targets, readable in-game.
+- 🔥 The boil readout now shows the **71% execution gate** for a Legendary; that
+  cliff used to be a single invisible number. Also fixed: the boil HUD labelled
+  the squirrel/popcorn/Joe events (added in v0.8) as "FLOATIES".
 
 ## New in v1.5 — **MILESTONE 1 of 6: FINISH THE LOOK** ✅
 

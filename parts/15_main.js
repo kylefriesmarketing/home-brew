@@ -351,12 +351,15 @@ window.MB = {
   /* dev/test helpers */
   phase(p){ CYCLE.phase=p; CYCLE.phaseT=0; BUS.emit("phase",p); UI.hud(); },
   brewNow(ings=["blackberry","honey"], water="spring", exec=1.3){
-    const {pot,axes}=BREW.calcPotential(water,ings,false);
+    const {pot,axes,style,purity}=BREW.calcPotential(water,ings,false);
     const L=BREW.checkLegendary(water,ings);
-    let score=L&&exec>=1.15? 4.6+(exec-1.15)*2 : (pot*exec);
+    const Wc=DATA.WATERS[water].cap;
+    let score=pot*exec;
+    if(L&&exec>=1.15) score=Math.max(score,(Wc/4)*(4.6+(exec-1.15)*2))+DATA.TUNE.legendBonus;
     const tier=BREW.tierOf(score);
-    const beer={name:BREW.beerName(water,ings,axes,tier.key,tier.key==="legend"?L:null),
+    const beer={name:BREW.beerName(water,ings,axes,tier.key,tier.key==="legend"?L:null,style),
       tier:tier.key,tierName:tier.name,tierCol:tier.col,score,exec,axes,ing:ings,water,
+      style:style.key, styleName:style.name, styleBlurb:style.blurb, purity:Math.round(purity*100)/100,
       legendary:tier.key==="legend"&&L?L.key:null,suggest:tier.price};
     const P=MAIN.player;
     const keg=spawnItem("keg",P.x+1,P.z,{state:"filled",beer,pints:DATA.TUNE.pintsPerKeg});

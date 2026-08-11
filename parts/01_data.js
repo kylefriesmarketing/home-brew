@@ -34,6 +34,34 @@ DATA.INGREDIENTS = {
   jar:       { name:"Copperhead's Mystery Jar", cost:0, s:1,b:1,f:2,w:3, cursed:true, secret:true, look:"jar", col:0xd8d2b0 },
 };
 
+/* ============================================================================
+   BEER STYLES — the M2 restructure (Potionomics' solution to our exact problem).
+   The RATIO between sweet/bitter/funky/weird decides WHICH BEER YOU MADE.
+   The TOTAL intensity decides HOW GOOD it is.
+
+   Before this, four authored axes were crushed into one scalar and customers
+   read only that scalar — so there was exactly one correct beer (coffee+honey)
+   from day 6 onward and the whole 16-ingredient pantry was a menu with one
+   right answer. Two orthogonal readings of the same vector fixes it: there is
+   no "more is better" direction any more, only "closer to a style", and
+   over-pouring your dominant axis drags you off-ratio into mud.
+
+   `mix` is the TARGET RATIO (s,b,f,w). Purity = cosine similarity to it.
+   ============================================================================ */
+DATA.STYLES = [
+  { key:"lager",  name:"Lager",      mix:[0.40,0.40,0.20,0.00], blurb:"clean, honest, unremarkable in the best way" },
+  { key:"amber",  name:"Amber Ale",  mix:[0.50,0.45,0.05,0.00], blurb:"the handshake of beers" },
+  { key:"ipa",    name:"IPA",        mix:[0.12,0.80,0.08,0.00], blurb:"bitter enough to argue with" },
+  { key:"stout",  name:"Stout",      mix:[0.10,0.65,0.25,0.00], blurb:"roasty, dark, sits in the chest" },
+  { key:"porter", name:"Porter",     mix:[0.35,0.55,0.10,0.00], blurb:"sweet up front, bitter on the way out" },
+  { key:"honey",  name:"Honey Ale",  mix:[0.80,0.12,0.08,0.00], blurb:"pure sunshine, dangerous at noon" },
+  { key:"fruit",  name:"Fruit Beer", mix:[0.62,0.08,0.30,0.00], blurb:"orchard in a glass" },
+  { key:"saison", name:"Saison",     mix:[0.20,0.18,0.62,0.00], blurb:"farmhouse funk, barn-adjacent" },
+  { key:"sour",   name:"Sour",       mix:[0.42,0.05,0.53,0.00], blurb:"puckers first, forgives later" },
+  { key:"gose",   name:"Gose",       mix:[0.26,0.20,0.30,0.24], blurb:"salty, strange, weirdly moreish" },
+  { key:"curio",  name:"Curiosity",  mix:[0.14,0.14,0.20,0.52], blurb:"you made this on purpose. allegedly." },
+];
+
 /* ---- the 12 Legendary recipes: ing = sorted multiset of NON-barley items ---- */
 DATA.LEGENDARIES = [
   { key:"trout",   name:"Trout Stout",        ing:["coffee","fish"],        water:"crick",  hint:"Somethin' fishy'd sit real nice in somethin' muddy… with a jolt of black mornin' juice." },
@@ -165,16 +193,20 @@ DATA.RANKS = [
 ];
 
 /* ---- quality tiers ---- */
+/* ⚠️ M2 RECALIBRATION: these minimums were tuned against the OLD one-scalar
+   potential curve. Under ratio→style the scores sit higher, and at the old
+   thresholds **83% of all 1,139 combos reached "LEGENDARY" tier** — which
+   destroys the word. Re-derived from the measured distribution. */
 DATA.TIERS = [
   { key:"swill",  name:"Swill",  min:0,   col:"#8a9a6a", price:1.5 },
-  { key:"decent", name:"Decent", min:1.2, col:"#c9c26a", price:3 },
-  { key:"good",   name:"Good",   min:2.2, col:"#e8a33d", price:5 },
-  { key:"great",  name:"Great",  min:3.2, col:"#e86a3d", price:8 },
+  { key:"decent", name:"Decent", min:1.5, col:"#c9c26a", price:3 },
+  { key:"good",   name:"Good",   min:2.7, col:"#e8a33d", price:5 },
+  { key:"great",  name:"Great",  min:4.0, col:"#e86a3d", price:8 },
   /* ⚠️ legend was 14 — MEASURED (n=4 evenings/cell) as the worst price in the
      game: $86 gross vs $133 at $10 and $142 at $6, and a QUARTER of what a
      Great earns at its own tag. $10 keeps it a premium tourist price while
      restoring "best beer = best money". See README's balance battery. */
-  { key:"legend", name:"LEGENDARY", min:4.2, col:"#ffd98a", price:10 },
+  { key:"legend", name:"LEGENDARY", min:5.3, col:"#ffd98a", price:10 },
 ];
 
 /* ---- beer name generator ---- */
@@ -253,7 +285,7 @@ DATA.TAGLINES = [
 DATA.TUNE = {
   startCash: 60,
   phaseLen: { morning: 115, afternoon: 135, evening: 170 },
-  legendBonus: 0.8,                 // a Legendary always beats the same brew without it
+  legendBonus: 1.0,                 // a Legendary always beats the best generic on that water
   rockScale: 7,                     // porch rocker time speed-up
   standMarkup: 1.75,                // MawMaw's farm-stand convenience surcharge
   standKegPrice: 26,                // her one spare keg (catalog: 15. she knows.)

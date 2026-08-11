@@ -252,12 +252,21 @@ UI.boilFrame = function(b){
   $("presneedle").style.transform=`rotate(${-90+b.pres*180}deg)`;
   $("stirfill").style.width=(b.stir*100)+"%";
   $("stirfill").style.background=b.stir>0.4?"var(--green)":"var(--red)";
-  $("boiltimer").textContent=`${Math.ceil(b.dur-b.t)}s — quality brewing: ${Math.round(b.good/(b.dur*0.62)*100)}%`;
+  /* the cliff between a good beer and a LEGENDARY one was a single invisible
+     number: exec = 0.3 + 1.2×q, and a Legendary needs exec ≥ 1.15 ⇒ q ≥ 71%.
+     Show the bar AND the gate, so the player can see what they're chasing. */
+  const q=b.good/(b.dur*0.62);
+  const pct=Math.round(q*100);
+  const gate=pct>=71;
+  $("boiltimer").innerHTML=`${Math.ceil(b.dur-b.t)}s — quality <b style="color:${gate?"#8fc088":"#e8a33d"}">${pct}%</b>`
+    + `<span style="opacity:.75"> · legendary needs 71%${gate?" ✓":""}</span>`;
   const ev=$("boilevent");
   if(b.eventNow){
     ev.style.display="block";
-    ev.textContent = b.eventNow.type==="foam"? `🫧 FOAM-OVER! MASH [S] ×${b.eventNow.mash}` :
-      b.eventNow.type==="bee"? "🐝 BEE. STAY CALM." : "🪵 FLOATIES! VENT!";
+    const T={ foam:`🫧 FOAM-OVER! MASH [S] ×${b.eventNow.mash}`, bee:"🐝 BEE. STAY CALM.",
+      floaties:"🪵 FLOATIES! VENT!", squirrel:"🐿️ SQUIRREL STOLE A LOG — FEED THE FIRE [F]",
+      pop:"🍿 POPCORN KERNEL — she's jumpy", sniff:"👃 JOE'S WATCHING — HOLD BOTH BANDS" };
+    ev.textContent = T[b.eventNow.type] || "🪵 FLOATIES! VENT!";
   } else ev.style.display="none";
 };
 UI.boilEnd = function(){
@@ -487,8 +496,20 @@ UI.brewBook = function(){
     return `<div class="row"><span class="nm">❓ ???</span><span class="sub">Hollow Joe might know…</span></div>`;
   }).join("");
   const s=G_STATE.stats;
+  /* M2: the style chart. The ratio between your four axes decides WHICH beer
+     you made — so the player needs to be able to read the map. */
+  const styles=DATA.STYLES.map(S=>{
+    const m=S.mix, dom=["sweet","bitter","funky","WEIRD"][m.indexOf(Math.max(...m))];
+    const bars=m.map((v,i)=>v>0.05?`${["s","b","f","w"][i]}${"▪".repeat(Math.max(1,Math.round(v*6)))}`:"").filter(Boolean).join(" ");
+    return `<div class="row"><span class="nm">${S.name} <span class="sub">${S.blurb}</span></span><span class="sub">${bars}</span></div>`;
+  }).join("");
   const o=UI.open(`<h1>📕 The Brew Book</h1><div class="sub">${Object.keys(G_STATE.discovered).length}/${DATA.LEGENDARIES.length} legendary recipes</div>
     <hr class="chalkline">${rows}<hr class="chalkline">
+    <h2>🍺 Styles — the ratio makes the beer</h2>
+    <p class="sub">Sweet / bitter / funky / WEIRD. The <b>balance</b> between them decides what you brewed;
+    the <b>total</b> decides how strong it lands. Pour too much of one thing and you slide off the style into mud.</p>
+    ${styles}
+    <hr class="chalkline">
     <p class="sub">batches brewed: ${s.brews||0} · pints served: ${s.served||0} · ficus incidents: ${s.ficus||0}</p>
     <div style="text-align:center"><span class="btn clickable" id="bb-x">close</span></div>`);
   o.querySelector("#bb-x").onclick=()=>UI.close();
