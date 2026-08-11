@@ -83,8 +83,15 @@ WORLD.build = function(){
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   const sc = sun.shadow.camera;
-  sc.left=-42; sc.right=42; sc.top=42; sc.bottom=-42; sc.near=2; sc.far=90;
-  sun.shadow.bias = -0.0012;
+  /* was ±42 (an 84-unit frustum ≈ 24px/unit — a mug got a 6-PIXEL shadow).
+     Tightened to the real play area: same map, ~1.7x the texel density. */
+  sc.left=-26; sc.right=34; sc.top=30; sc.bottom=-26; sc.near=2; sc.far=90;
+  sun.shadow.bias = -0.0009;
+  sun.shadow.normalBias = 0.02;      // the correct knob for lumpy displaced geometry
+  /* the whole shadow map used to re-render every frame (incl. 180 tree draws);
+     now it refreshes on the 12fps tick — fidelity AND framerate */
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = true;
   scene.add(sun); scene.add(sun.target);
 
   const pubLight = new THREE.PointLight(0xffb35a, 0, 22, 2); pubLight.position.set(11, 3.4, -2);

@@ -63,7 +63,8 @@ BREW.setup = function(){
           return `Pour in ${DATA.WATERS[it.data.tier].name} (${k.waterUnits}/3)`;
         if(it.kind==="ing" && k.stage!=="wort"){
           const d=DATA.INGREDIENTS[it.data.type];
-          if(d.base) return k.barley? "Barley's already in" : "Dump in the barley";
+          if(d.base) return !k.barley ? "Dump in the barley"
+            : k.ings.length<3 ? "Add EXTRA grain (takes a flavor slot)" : "Barley's already in";
           return k.ings.length<3 ? `Toss in ${d.name}` : "It's full up (3 flavors max)";
         }
         if(it.kind==="jarGift") return "Pour in… whatever this is";
@@ -90,7 +91,13 @@ BREW.setup = function(){
         }
         if(it.kind==="ing"){
           const d=DATA.INGREDIENTS[it.data.type];
-          if(d.base){ if(k.barley) return; k.barley=true; }
+          /* first sack is the BASE; a second sack is "extra grain" and takes a
+             flavor slot — this is what makes Hot Dog Hefeweizen brewable */
+          if(d.base){
+            if(!k.barley) k.barley=true;
+            else if(k.ings.length<3) k.ings.push(it.data.type);
+            else return;
+          }
           else { if(k.ings.length>=3) return; k.ings.push(it.data.type); }
           MAIN.player.carry=null; MAIN.player.carryPose=0; killItem(it);
           SFX.play("plop",K.x,K.z); SFX.play("splash",K.x,K.z);
@@ -501,7 +508,16 @@ BREW.finishBoil = function(blown){
   exec=clamp(exec,0.3,1.5);
   const {pot,axes}=BREW.calcPotential(k.water,k.ings,k.floaties);
   const L=BREW.checkLegendary(k.water,k.ings);
-  let score = L && exec>=1.15 ? 4.6+ (exec-1.15)*2 : pot*exec;
+  /* ⚠️ this used to OVERRIDE score for a Legendary: 4.6+(exec-1.15)*2, capping
+     at 5.30 — while a plain coffee+honey on spring water scores pot 3.98 × 1.5
+     = 5.97. Every one of the 16 secret recipes was strictly WORSE than the
+     obvious two-ingredient mix, which made the whole discovery fantasy
+     pointless. Now the legendary status is a FLOOR (so cursed recipes, whose
+     raw potential is deliberately awful, still land in tier) PLUS a bonus (so a
+     Legendary always beats the same brew without it, and building it out of
+     good ingredients pays MORE). */
+  let score = pot*exec;
+  if(L && exec>=1.15) score = Math.max(score, 4.6 + (exec-1.15)*2) + DATA.TUNE.legendBonus;
   const tier=BREW.tierOf(score);
   const isLegend = tier.key==="legend" && L;
   const beer={

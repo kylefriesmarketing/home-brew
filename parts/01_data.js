@@ -44,7 +44,11 @@ DATA.LEGENDARIES = [
   { key:"bees",    name:"Bee's Knees",        ing:["honey","honey"],        water:"spring", hint:"Two jars of the sourwood, nothin' else, and water with no excuses." },
   { key:"preacher",name:"Peach Preacher",     ing:["honey","peach"],        water:"spring", hint:"A peach and a prayer and the clean cold stuff. Hallelujah." },
   { key:"brawler", name:"Blackberry Brawler", ing:["blackberry","hops","hops"], water:"spring", hint:"Berries that fight back want double bitters in their corner." },
-  { key:"hefe",    name:"Hot Dog Hefeweizen", ing:["barleyx","hotdog"],     water:"sink",   hint:"Ballpark in a glass: dog water, extra grain, and the sink knows what it did." },
+  /* ⚠️ was ing:["barleyx","hotdog"] — "barleyx" existed NOWHERE else in the
+     codebase, and barley never enters k.ings (it sets k.barley), so this was
+     UNOBTAINABLE and the alllegend "Whole Book" plaque was unearnable. The
+     hint says "extra grain": a SECOND barley sack now goes into ings. */
+  { key:"hefe",    name:"Hot Dog Hefeweizen", ing:["barley","hotdog"],      water:"sink",   hint:"Ballpark in a glass: dog water, extra grain, and the sink knows what it did." },
   { key:"iceage",  name:"Ice Age IPA",        ing:["apple","hops"],         water:"glacier",hint:"When you finally haul the old ice down, bring apples and bitters to meet it." },
   { key:"moon",    name:"Moonlight Special",  ing:["jar"],                  water:null,     hint:null, wild:true },
   { key:"sudsy",   name:"The Grand Ol' Sudsy",ing:["blackberry","honey"],   water:"glacier",hint:"The champion's pour: glacier cold, berry dark, sourwood sweet. That one wins wars." },
@@ -249,6 +253,7 @@ DATA.TAGLINES = [
 DATA.TUNE = {
   startCash: 60,
   phaseLen: { morning: 115, afternoon: 135, evening: 170 },
+  legendBonus: 0.8,                 // a Legendary always beats the same brew without it
   rockScale: 7,                     // porch rocker time speed-up
   standMarkup: 1.75,                // MawMaw's farm-stand convenience surcharge
   standKegPrice: 26,                // her one spare keg (catalog: 15. she knows.)

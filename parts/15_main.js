@@ -198,9 +198,14 @@ MAIN.updateCamera = function(dt){
   MAIN.camTarget.y=damp(MAIN.camTarget.y,focus.y+1.2,8,dt);
   MAIN.camTarget.z=damp(MAIN.camTarget.z,focus.z,8,dt);
   _shake=damp(_shake,0,5,dt);
-  const sx=(Math.random()-0.5)*_shake*0.5, sy=(Math.random()-0.5)*_shake*0.5;
+  /* ⚠️ the offset used to be added to the camera AND the lookAt target, which
+     left the view direction unchanged — every impact in the game landed as
+     faint parallax instead of a shake. Shake the EYE only, and let the target
+     stay put, so the world actually swings through frame. */
+  const sx=(Math.random()-0.5)*_shake*0.9, sy=(Math.random()-0.5)*_shake*0.9;
   WORLD.camera.position.set(MAIN.camPos.x+sx, MAIN.camPos.y+sy, MAIN.camPos.z);
-  WORLD.camera.lookAt(MAIN.camTarget.x+sx, MAIN.camTarget.y+sy, MAIN.camTarget.z);
+  WORLD.camera.lookAt(MAIN.camTarget.x, MAIN.camTarget.y, MAIN.camTarget.z);
+  WORLD.camera.rotateZ((Math.random()-0.5)*_shake*0.06);   // a touch of roll sells the hit
 };
 
 /* ---------- title orbit cam ---------- */
@@ -228,6 +233,8 @@ MAIN.tick = function(dt, skipRender){
   dt=Math.min(dt,0.05);
   MAIN.time+=dt;
   CLAY.step(dt);
+  clayBoilSurface();                                 // re-sculpt the thumbprints on each held frame
+  if(CLAY.tick && WORLD.renderer) WORLD.renderer.shadowMap.needsUpdate=true;
   WORLD.update(dt);
   puffsUpdate(dt);
   SFX.update(dt);
@@ -235,7 +242,11 @@ MAIN.tick = function(dt, skipRender){
   if(!MAIN.started){
     MAIN.titleCam(dt);
     if(typeof ALIVE!=="undefined") ALIVE.update(dt);
-    if(!skipRender){ if(typeof POST!=="undefined"&&POST.ok) POST.render(); else WORLD.renderer.render(WORLD.scene, WORLD.camera); }
+    if(!skipRender){
+    latchApply();                                    // hold the 12fps pose…
+    if(typeof POST!=="undefined"&&POST.ok) POST.render(); else WORLD.renderer.render(WORLD.scene, WORLD.camera);
+    latchRelease();                                  // …and give the sim its pose straight back
+  }
     return;
   }
 
@@ -267,7 +278,11 @@ MAIN.tick = function(dt, skipRender){
     if(MAIN.mode==="walk") MAIN.dropCarry(MAIN.input.run);
   }
   MAIN.updateCamera(dt);
-  if(!skipRender){ if(typeof POST!=="undefined"&&POST.ok) POST.render(); else WORLD.renderer.render(WORLD.scene, WORLD.camera); }
+  if(!skipRender){
+    latchApply();                                    // hold the 12fps pose…
+    if(typeof POST!=="undefined"&&POST.ok) POST.render(); else WORLD.renderer.render(WORLD.scene, WORLD.camera);
+    latchRelease();                                  // …and give the sim its pose straight back
+  }
 };
 
 /* ---------- boot ---------- */

@@ -1,9 +1,73 @@
-# HOME BREW — dev notes (v1.3, content-complete campaign)
+# HOME BREW — dev notes (v1.4, content-complete campaign)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v1.4 — CLAY, FOR REAL + two game-breaking fixes
+
+Acted on an external assessment of v1.3. **Every claim was verified in source
+before changing anything** — all five load-bearing ones were true.
+
+### The two that broke the game
+- 🍺 **Hot Dog Hefeweizen was UNOBTAINABLE.** Its recipe was `["barleyx",…]`
+  and `barleyx` existed *nowhere else in the codebase*; barley sets `k.barley`
+  and never enters `k.ings`, so `checkLegendary` could never match. 15 of 16
+  discoverable ⇒ the `alllegend` "Whole Book" plaque was **unearnable**. Now
+  `["barley","hotdog"]`, and a SECOND barley sack is "extra grain" that takes a
+  flavor slot — which is exactly what Joe's hint always said.
+- ⚖️ **Every Legendary lost to a generic two-ingredient brew.** The legendary
+  branch *overrode* score with `4.6+(exec−1.15)×2`, capping at **5.30** — while
+  plain coffee+honey on spring water is potential 3.98 × 1.5 exec = **5.97**.
+  The entire 16-recipe discovery fantasy was mechanically pointless. Legendary
+  status is now a **floor** (cursed recipes have deliberately awful raw
+  potential — Trout Stout's is 0.6 — so they still need rescuing) **plus**
+  `TUNE.legendBonus`. Measured through the real `finishBoil`: every Legendary
+  **6.10** vs the dominant mix **5.97**.
+
+### The look — the 12fps trick, finally applied to everything
+- 🎬 **Global pose latch** (`04_clay.js`). Only `walkPhase` was quantized; the
+  puppets' world transforms were written smoothly every frame, so legs stepped
+  on twos while bodies glided at 60 — that reads as a walk-cycle *bug*. Now
+  `CLAY.tick` marks the 12fps boundary and `latchApply()/latchRelease()` bracket
+  the render: hold the pose, draw, hand the true pose straight back. Safe even
+  for actors whose mesh transform IS their sim truth (Moppy, birds, raccoon).
+  **Measured: held pose 4 distinct values over 18 frames; true position and
+  camera 18 each.** ⚠️ NEVER latch the camera/liquids/steam/particles/UI — the
+  smooth camera against steppy puppets is the entire tell.
+- 🖐️ **Thumbprint surface.** `clayMat` shipped a bare material with **no maps**
+  despite the file promising "thumbprint materials". Now one 512² canvas built
+  at boot — layered value noise (weighted to LOW frequencies; high-frequency
+  speckle reads as concrete, not clay) + stamped thumbprint arcs → Sobel →
+  normal map, plus a contrast-inverted roughness map so the sheen varies.
+  Shared by every material: one upload, zero extra draw calls.
+- ✨ **The surface BOILS on the 12fps clock** — `clayBoilSurface()` nudges the
+  map offset/rotation per held frame, so the thumbprints land differently every
+  exposure, like a puppet re-sculpted between shots. Makes even a *static* prop
+  read as stop-motion for two float writes.
+- 🌑 **Shadows: 8 receivers → 385.** Clay helpers set `castShadow` but never
+  `receiveShadow`, so nothing self-shadowed and standing indoors looked
+  identical to standing in the yard. Added in the four helpers; shadow camera
+  tightened ±42 → the real play area (~1.7× texel density); `normalBias 0.02`
+  for the lumpy displaced geometry; and **`shadowMap.autoUpdate=false`, refreshed
+  on the 12fps tick** — the whole map used to re-render every frame including
+  180 tree draws. **Net perf: 3.4ms → 1.5ms/frame.** Fidelity *and* framerate.
+- 📷 **Camera shake was invisible** — the offset was added to the camera AND the
+  lookAt target, leaving view direction unchanged, so every impact landed as
+  faint parallax. Shakes the eye only now, plus a touch of roll.
+- 🧱 `clayCyl`'s geometry cache key omitted `radial`, so two calls differing only
+  in segment count silently shared the first geometry. No collision today; fixed
+  as a landmine.
+
+⚠️ Tuning notes for the surface: `normalScale 0.8`, `repeat 2`, Sobel `STR 7.0`,
+octave amps weighted low. At `STR 2.4 / scale 0.55` it was invisible past ~2m;
+at `STR 7 / scale 1.15` with flat octave weights it read as **concrete**.
+
+**Still open from the assessment** (bigger jobs, not started): ratio→style /
+total→tier recipe restructure, customer appetites (red/green conditions,
+per-archetype reputation, popularity decay), automation capping the boil,
+late-game money sinks, Copperhead's physical presence, Ranger Dot's body.
 
 ## New in v1.3 — THE BALANCE BATTERY (the pricing feel-check, measured)
 
