@@ -252,6 +252,7 @@ MAIN.tick = function(dt, skipRender){
   if(typeof EVENTS!=="undefined") EVENTS.update(dt);
   if(typeof HOMESTEAD!=="undefined") HOMESTEAD.update(dt);
   if(typeof ALIVE!=="undefined") ALIVE.update(dt);
+  if(typeof SEASONS!=="undefined") SEASONS.update(dt);
   UI.update(dt);
 
   if(MAIN.mode==="walk"||MAIN.mode==="fork") MAIN.scanInteract();
@@ -292,6 +293,7 @@ MAIN.boot = function(){
   if(typeof HOMESTEAD!=="undefined") HOMESTEAD.setup();
   if(typeof POST!=="undefined") POST.setup();
   if(typeof ALIVE!=="undefined") ALIVE.setup();
+  if(typeof SEASONS!=="undefined") SEASONS.setup();
   UI.setup();
 
   let last=performance.now();

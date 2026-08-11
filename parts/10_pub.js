@@ -289,7 +289,8 @@ PUB.update = function(dt){
   const ph=CYCLE.phase;
   if(ph==="evening" && G_STATE.open){
     PUB.spawnT-=dt;
-    const rate=(DATA.TUNE.custBase+G_STATE.fame*DATA.TUNE.custFame)/60; // per second
+    const rate=(DATA.TUNE.custBase+G_STATE.fame*DATA.TUNE.custFame)/60
+      *((typeof SEASONS!=="undefined")?DATA.SEASONS[SEASONS.current].cust:1); // per second
     if(PUB.spawnT<=0 && PUB.customers.length<14){
       PUB.spawnT=1/Math.max(rate,0.01)*(0.6+rand(0.8));
       PUB.spawnCustomer();

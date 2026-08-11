@@ -25,6 +25,8 @@ DATA.INGREDIENTS = {
   candy:     { name:"Gas-Station Candy", cost:4,  s:3,b:0,f:0,w:1, look:"pile",    col:0xe85a8a },
   coffee:    { name:"Cold Brew Coffee",  cost:6,  s:0,b:3,f:0,w:0, look:"jar",     col:0x38281c },
   apple:     { name:"Orchard Apples",    cost:5,  s:2,b:1,f:0,w:0, look:"fruit",   col:0xc84c3a },
+  oil:       { name:"Two-Stroke Oil",    cost:3,  s:0,b:1,f:1,w:3, cursed:true, look:"jar",   col:0x2a2420 },
+  letter:    { name:"Unsent Love Letter",cost:2,  s:2,b:0,f:0,w:2, cursed:true, look:"letter",col:0xf4ead8 },
   fish:      { name:"Rotten Fish",       cost:3,  s:0,b:0,f:2,w:3, cursed:true, look:"fish",  col:0x7a9a8a },
   sock:      { name:"Old Sock",          cost:2,  s:0,b:0,f:3,w:2, cursed:true, look:"sock",  col:0xb0a890 },
   hotdog:    { name:"Hot Dog Water",     cost:2,  s:0,b:0,f:2,w:2, cursed:true, look:"jar",   col:0xc2907a },
@@ -46,6 +48,40 @@ DATA.LEGENDARIES = [
   { key:"iceage",  name:"Ice Age IPA",        ing:["apple","hops"],         water:"glacier",hint:"When you finally haul the old ice down, bring apples and bitters to meet it." },
   { key:"moon",    name:"Moonlight Special",  ing:["jar"],                  water:null,     hint:null, wild:true },
   { key:"sudsy",   name:"The Grand Ol' Sudsy",ing:["blackberry","honey"],   water:"glacier",hint:"The champion's pour: glacier cold, berry dark, sourwood sweet. That one wins wars." },
+  { key:"dearjohn",name:"Dear John Doppelbock",ing:["honey","letter"],      water:"sink",   hint:"Somebody's unsent feelings, sweetened with tree-gold, cried straight into the dishwater." },
+  { key:"twostroke",name:"Two-Stroke Stout",  ing:["coffee","oil"],         water:"crick",  hint:"What the forklift drinks after close: black mornin' juice, a splash of engine sauce, muddy." },
+  { key:"flannel", name:"Fireside Flannel",   ing:["apple","sorghum"],      water:"spring", hint:"Orchard fruit an' sorghum molasses in clean cold water. Tastes like a warm shirt." },
+  { key:"mothwing",name:"Moth Wing Pilsner",  ing:["candy","ramps"],        water:"hose",   hint:"Sugar and stink-onion, straight out the garden hose. The moths SWEAR by it." },
+];
+
+/* ---- seasons: 10-day wheel, fall first (the home season) ---- */
+DATA.SEASONS = {
+  order:["fall","winter","spring","summer"],
+  daysPer:10,
+  fall:  { label:"Fall",   icon:"🍁", cust:1.0,  heat:1.0,  storm:1.0 },
+  winter:{ label:"Winter", icon:"❄️", cust:0.85, heat:1.18, storm:0.7 },   // cold air eats the fire
+  spring:{ label:"Spring", icon:"🌸", cust:1.0,  heat:1.0,  storm:1.5 },
+  summer:{ label:"Summer", icon:"☀️", cust:1.15, heat:0.95, storm:0.9 },
+};
+
+/* ---- the Brag Board: plaques earned by playing, hung in the pub ---- */
+DATA.BRAGS = [
+  { key:"firstbrew",  icon:"🍺", name:"First Drop",        desc:"brew your first batch" },
+  { key:"firstlegend",icon:"⭐", name:"Lightning Bottled",  desc:"discover a Legendary" },
+  { key:"alllegend",  icon:"👑", name:"The Whole Book",     desc:"discover EVERY Legendary" },
+  { key:"served100",  icon:"🍻", name:"Century Pour",       desc:"serve 100 pints" },
+  { key:"fairwon",    icon:"🎪", name:"County Champ",       desc:"win the County Fair" },
+  { key:"worldswon",  icon:"🏆", name:"Best in the World",  desc:"beat Copperhead at Worlds" },
+  { key:"leaf",       icon:"🍂", name:"Leaf Day Survivor",  desc:"serve 8+ on a Leaf Day" },
+  { key:"bearfriend", icon:"🐻", name:"Bear Whisperer",     desc:"a pub bear leaves happy" },
+  { key:"mop10",      icon:"🧹", name:"Clean Floors Club",  desc:"mop 10 spills" },
+  { key:"bottles",    icon:"🍾", name:"Night Shift",        desc:"bottle 100 pints" },
+  { key:"bobfan",     icon:"📰", name:"Press Darling",      desc:"survive 5 Bob reviews" },
+  { key:"hats",       icon:"🎩", name:"Hat Person",         desc:"own 6 hats" },
+  { key:"rich",       icon:"💰", name:"Mattress Money",     desc:"hold $1,000 at once" },
+  { key:"winter",     icon:"❄️", name:"Frostbite Brewer",   desc:"brew through a winter" },
+  { key:"joe",        icon:"👃", name:"Joe's Favorite",     desc:"serve Hollow Joe 5 cursed pints" },
+  { key:"machines",   icon:"🔧", name:"Industrialist",      desc:"install 8 machines" },
 ];
 
 /* ---- machines ---- */
@@ -101,6 +137,7 @@ DATA.CUSTOMERS = {
   hiker:  { name:"Hiker",  wallet:12, sense:0.3, tipMul:1.0, fameMul:0.7, col:0x5a8a5a, chat:["water first. then beer.","I smelled this place from the ridge","carbs are carbs"] },
   joe:    { name:"Hollow Joe", wallet:99, sense:0, tipMul:3.0, fameMul:1.0, col:0x6a6a7a, special:true },
   bob:    { name:"Barleycorn Bob", wallet:30, sense:0.8, tipMul:1.0, fameMul:0, col:0xd8c8a0, special:true, chat:["*scribbles*","don't mind me. reviewing.","mm. yes. words."] },
+  cope:   { name:"Copperhead", wallet:45, sense:1.0, tipMul:2.2, fameMul:1.2, col:0x5e4a3a, special:true, chat:["...place ain't terrible","don't tell NOBODY I'm here","still say it's yard soup. good yard soup."] },
 };
 
 /* ---- Bob's press column (reviews are wrong in funny ways, even the raves) ---- */

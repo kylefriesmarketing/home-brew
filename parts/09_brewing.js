@@ -297,7 +297,7 @@ BREW.startBoil = function(){
   BREW.boil={
     t:0, dur:DATA.TUNE.boilTime,
     heat:0.45, pres:0.25,
-    heatDrift:(on("granny")?0.55:1)*0.11,
+    heatDrift:(on("granny")?0.55:1)*0.11*((typeof SEASONS!=="undefined")?DATA.SEASONS[SEASONS.current].heat:1),
     presRise:(on("governor")?0.55:1)*0.055*storm,
     bandH:[0.42,0.72], bandP:[0.1,0.55],
     good:0, stir:1, scorchT:0, blowT:0,

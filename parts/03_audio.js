@@ -143,25 +143,62 @@ const SFX = {
       const f=pick([392,440,587]);
       this.tone(f,stepDur*7,"sawtooth",0.05); this.tone(f*1.5,stepDur*7,"sawtooth",0.03);
     }
+    // jaw harp twang (rank 4+) — the full jug band
+    if(this.rank>=4 && s===4 && Math.random()<0.45)
+      this.tone(150,stepDur*2.2,"square",0.06,undefined,undefined,110);
   },
-  ambT:0,
+  ambT:0, rainT:0, breathT:0, crowdT:0,
   ambUpdate(dt){
     if(!this.ready||this.muted) return;
+    /* layered beds that stack over the phase ambience */
+    this.rainT-=dt;
+    if(typeof G_STATE!=="undefined" && G_STATE && G_STATE.weather==="storm" && this.rainT<=0){
+      this.rainT=0.35;
+      this.noise(0.55,0.10,1400,0.5,undefined,undefined,-200);          // rain patter on the roof
+      if(Math.random()<0.10) this.noise(2.2,0.15,70,0.5,undefined,undefined,-20);  // distant roll
+    }
+    this.breathT-=dt;
+    if(typeof BREW!=="undefined" && BREW.boil && this.breathT<=0){
+      this.breathT=1.1;
+      this.noise(0.7, 0.035+BREW.boil.heat*0.08, 260, 0.7, undefined, undefined, 80);   // the kettle breathes
+    }
+    this.crowdT-=dt;
+    if(typeof PUB!=="undefined" && PUB.customers.length>3 && this.crowdT<=0){
+      this.crowdT=rand(1.2,2.4);
+      this.noise(1.4, 0.045+Math.min(PUB.customers.length,10)*0.006, 500, 0.4, undefined, undefined, rand(-80,80));  // murmur
+    }
     this.ambT-=dt;
     if(this.ambT>0) return;
     const ph=CYCLE?CYCLE.phase:"morning";
-    if(ph==="morning"){ // birdsong
+    const season=(typeof SEASONS!=="undefined")?SEASONS.current:"fall";
+    if(ph==="morning"){ // birdsong (thin and hardy in winter)
       const f=rand(1800,3200);
-      [0,80,160].forEach((ms,i)=>setTimeout(()=>this.tone(f+i*rand(-200,300),0.09,"sine",0.12),ms));
-      this.ambT=rand(1.2,3.5);
+      const reps=season==="winter"?[0]:[0,80,160];
+      reps.forEach((ms,i)=>setTimeout(()=>this.tone(f+i*rand(-200,300),0.09,"sine",season==="winter"?0.07:0.12),ms));
+      this.ambT=season==="winter"?rand(3,7):rand(1.2,3.5);
     } else if(ph==="afternoon"){
-      if(Math.random()<0.5){ const f=rand(1600,2600); this.tone(f,0.12,"sine",0.08); }
+      if(season==="summer"){ this.noise(1.1,0.05,5200,3);
+      } else if(Math.random()<0.5){ const f=rand(1600,2600); this.tone(f,0.12,"sine",0.08); }
       this.ambT=rand(2,5);
-    } else { // evening + night crickets
-      const n=3+irand(3);
-      for(let i=0;i<n;i++) setTimeout(()=>this.tone(4200+rand(-300,300),0.05,"sine",0.07),i*90);
-      if(ph==="night"&&Math.random()<0.1) setTimeout(()=>{ this.tone(340,0.5,"triangle",0.12,undefined,undefined,-40); },400); // owl
-      this.ambT=rand(0.8,1.6);
+    } else {
+      if(season==="winter"){                       // wind, and an owl with opinions
+        this.noise(rand(1.2,2.2),0.09,300,0.5,undefined,undefined,-120);
+        if(Math.random()<0.12) setTimeout(()=>this.tone(340,0.5,"triangle",0.12,undefined,undefined,-40),400);
+        this.ambT=rand(1.6,3.2);
+      } else if(season==="spring"){                // peepers
+        const n=4+irand(4);
+        for(let i=0;i<n;i++) setTimeout(()=>this.tone(2700+rand(-200,300),0.06,"sine",0.08),i*70);
+        this.ambT=rand(0.6,1.2);
+      } else if(season==="summer"){                // cicadas saw away
+        this.noise(rand(0.8,1.4),0.06,5200,3);
+        if(Math.random()<0.08) setTimeout(()=>this.tone(340,0.5,"triangle",0.11,undefined,undefined,-40),400);
+        this.ambT=rand(1,2);
+      } else {                                     // fall crickets (the original)
+        const n=3+irand(3);
+        for(let i=0;i<n;i++) setTimeout(()=>this.tone(4200+rand(-300,300),0.05,"sine",0.07),i*90);
+        if(ph==="night"&&Math.random()<0.1) setTimeout(()=>{ this.tone(340,0.5,"triangle",0.12,undefined,undefined,-40); },400);
+        this.ambT=rand(0.8,1.6);
+      }
     }
   },
   update(dt){ this.musicUpdate(dt); this.ambUpdate(dt); },

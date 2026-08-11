@@ -204,6 +204,7 @@ const CUSTOMER_LOOKS = {
   hiker:  ()=>({skin:pick([0xe8b48c,0xc98c5a]), shirt:pick([0x4c7a4c,0x5a8a8a]), pants:0x5e402a, hat:pick(["beanie",null]), accessory:"pack"}),
   joe:    ()=>({skin:0xcabd9e, shirt:0x5a5a6a, pants:0x4a4a52, hat:"hood", accessory:"lantern"}),
   bob:    ()=>({skin:0xe8b48c, shirt:0xc9bd9a, pants:0x6a5a48, hat:"bucket", accessory:"camera"}),
+  cope:   ()=>({skin:0xc98c5a, shirt:0x5e4a3a, pants:0x3a3a32, hat:"straw", belly:true}),
 };
 function makeCustomer(type){
   const look=CUSTOMER_LOOKS[type]();

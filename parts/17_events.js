@@ -22,10 +22,11 @@ EVENTS.setup = function(){
 EVENTS.onDay = function(day){
   G_STATE.power=true; EVENTS.blackoutRolled=false;
   /* storm roll */
-  G_STATE.weather = (day>3 && Math.random()<DATA.TUNE.stormChance) ? "storm" : "clear";
+  G_STATE.weather = (day>3 && Math.random()<DATA.TUNE.stormChance*((typeof SEASONS!=="undefined")?DATA.SEASONS[SEASONS.of(day)].storm:1)) ? "storm" : "clear";
   if(G_STATE.weather==="storm") setTimeout(()=>toast(DATA.EVENTS.stormMorn,"bad",4500), 2200);
   /* leaf day */
-  G_STATE.leafDay = (day%DATA.TUNE.leafEvery===3) && day>4 && G_STATE.weather!=="storm";
+  G_STATE.leafDay = (day%DATA.TUNE.leafEvery===3) && day>4 && G_STATE.weather!=="storm"
+    && ((typeof SEASONS==="undefined") || SEASONS.of(day)==="fall");   // leaf-peepers only peep in fall
   if(G_STATE.leafDay) setTimeout(()=>toast(DATA.EVENTS.leafMorn,"gold",5000), 3000);
   EVENTS.leafSpawned=0;
   /* the Boys */
@@ -103,7 +104,7 @@ EVENTS.updateBear = function(dt){
       if(B.t>2.6){
         B.state="out";
         const good=Math.random()<0.55;
-        if(good){ STORY.fame(8,"bear content"); toast(DATA.EVENTS.bearPubGood,"gold",4500); SFX.play("yay"); }
+        if(good){ STORY.fame(8,"bear content"); toast(DATA.EVENTS.bearPubGood,"gold",4500); SFX.play("yay"); G_STATE.flags.bearFriend=true; }
         else { STORY.fame(-5,"bear panic"); toast(DATA.EVENTS.bearPubBad,"bad",4500); SFX.play("ew"); }
         G_STATE.bearStage=0; G_STATE.spentGrain=0;
         WORLD.props.dumpsterGrain.visible=false;

@@ -1,9 +1,38 @@
-# HOME BREW — dev notes (v1.0, content-complete campaign)
+# HOME BREW — dev notes (v1.1, content-complete campaign)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v1.1 — SEASONS, THE BRAG BOARD & COPPERHEAD COMES AROUND (`21_seasons.js`)
+
+- 🍂❄️🌸☀️ **The calendar rolls**: 10-day seasons, fall first (the home season),
+  derived purely from `G_STATE.day` — nothing new in the save. **Winter** is the
+  showpiece: the whole mountain lerps to snow over 4s (vertex-palette swap with
+  a grassy-vertex mask), the crick freezes over, icicles grow under the eaves,
+  snow falls, ground cover whitens, butterflies leave, everyone's **breath
+  shows**, boil heat drains 18% faster, and crowds thin to the faithful.
+  Spring: petals + peepers + 1.5× storms. Summer: cicadas + thirsty crowds.
+  Leaf Day now only lands in fall (as nature intended). `SEASONS.force="winter"`
+  to preview any season.
+- 🏆 **The Brag Board** (bible-style physical achievements): 16 plaques hung on
+  a board over the bar — ghost slots fill in as you earn them (first brew, all
+  16 Legendaries, Bear Whisperer, Frostbite Brewer, Mattress Money…). Station at
+  the register end opens the board + The Ledger of You (lifetime stats).
+  `G_STATE.brags` rides the save; plaques re-hang on load.
+- 🐍 **Copperhead comes around**: after you beat him at Worlds he shows up at
+  YOUR bar every few evenings — grudging bubbles ("…s'alright."), doubles as a
+  great tipper, and leaves with a nod worth +2 fame (35% of the time he leaves
+  jerky. It's incredible. Damn him.) His ambient figure across the crick hides
+  while he visits — a man can't be two places.
+- 🍺 **Four new Legendaries (16 total)** + two cursed ingredients (Two-Stroke
+  Oil, Unsent Love Letter): Dear John Doppelbock, Two-Stroke Stout, Fireside
+  Flannel, Moth Wing Pilsner. Joe hints them; the Brew Book counts are dynamic.
+- 🎵 **Audio deepened**: crowd murmur past 3 customers, rain-on-the-roof +
+  distant rolls in storms, the kettle literally breathes with its heat, seasonal
+  night ambience (winter wind / spring peepers / summer cicadas / fall crickets),
+  and a rank-4 jaw-harp twang completes the jug band.
 
 ## New in v1.0 — THE ART & ALIVE PASS (`19_post.js` + `20_alive.js`, all free)
 

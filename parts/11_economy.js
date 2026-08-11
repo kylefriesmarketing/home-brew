@@ -25,7 +25,7 @@ ECON.freshState = function(){
     food:{}, gift:{tee:0,globe:0,plush:0},
     spentGrain:0, bearStage:0,
     weather:"clear", power:true, leafDay:false, cleanNights:0,
-    puddles:[],
+    puddles:[], brags:{},
   };
 };
 ECON.newState = function(){

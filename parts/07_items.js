@@ -62,6 +62,8 @@ function itemMesh(kind, data){
       case "crayon": { const c=clayCyl(0.07,0.07,0.44,col,0.02,445); c.position.y=0.22; g.add(c);
         const tip=clayCyl(0.01,0.07,0.12,col,0.02,446); tip.position.y=0.5; g.add(tip);
         const label=clayCyl(0.075,0.075,0.2,0xe8e0cc,0.02,447); label.position.y=0.2; g.add(label); break; }
+      case "letter": { const env=clayBox(0.36,0.04,0.26,col,0.02,448); env.position.y=0.05; env.rotation.y=0.3; g.add(env);
+        const heart=claySphere(0.045,0xb5472e,0.08,449); heart.scale.y=0.5; heart.position.set(0.05,0.09,0.02); g.add(heart); break; }
     }
   }
   else if(kind==="plate"){

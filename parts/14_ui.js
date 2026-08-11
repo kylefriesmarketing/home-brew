@@ -446,7 +446,7 @@ UI.credits = function(){
     <div class="row"><span class="nm">Days on the mountain</span><span class="pr">${G_STATE.day}</span></div>
     <div class="row"><span class="nm">Batches brewed</span><span class="pr">${s.brews||0}</span></div>
     <div class="row"><span class="nm">Pints served</span><span class="pr">${s.served||0}</span></div>
-    <div class="row"><span class="nm">Legendaries discovered</span><span class="pr">${Object.keys(G_STATE.discovered).length}/12</span></div>
+    <div class="row"><span class="nm">Legendaries discovered</span><span class="pr">${Object.keys(G_STATE.discovered).length}/${DATA.LEGENDARIES.length}</span></div>
     <div class="row"><span class="nm">Ficus incidents</span><span class="pr">${s.ficus||0}</span></div>
     <hr class="chalkline">
     <p class="sub" style="text-align:center">the mountain keeps going. so do you. (endless sandbox unlocked — brew weird.)</p>
@@ -473,7 +473,7 @@ UI.brewBook = function(){
     return `<div class="row"><span class="nm">❓ ???</span><span class="sub">Hollow Joe might know…</span></div>`;
   }).join("");
   const s=G_STATE.stats;
-  const o=UI.open(`<h1>📕 The Brew Book</h1><div class="sub">${Object.keys(G_STATE.discovered).length}/12 legendary recipes</div>
+  const o=UI.open(`<h1>📕 The Brew Book</h1><div class="sub">${Object.keys(G_STATE.discovered).length}/${DATA.LEGENDARIES.length} legendary recipes</div>
     <hr class="chalkline">${rows}<hr class="chalkline">
     <p class="sub">batches brewed: ${s.brews||0} · pints served: ${s.served||0} · ficus incidents: ${s.ficus||0}</p>
     <div style="text-align:center"><span class="btn clickable" id="bb-x">close</span></div>`);

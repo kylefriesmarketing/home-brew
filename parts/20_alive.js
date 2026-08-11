@@ -48,8 +48,9 @@ ALIVE.buildCover = function(){
   };
   const M=new THREE.Matrix4(), Q=new THREE.Quaternion(), S=new THREE.Vector3(), P=new THREE.Vector3();
   const E=new THREE.Euler();
+  ALIVE.coverMeshes=[];
   const scatter=(kind, count, mat, opts={})=>{
-    const im=new THREE.InstancedMesh(geos[kind], mat, count);
+    const im=new THREE.InstancedMesh(geos[kind], mat.clone(), count);   // clone: seasons tint these
     let placed=0, guard=0;
     while(placed<count && guard++<count*14){
       let x,z;
@@ -73,6 +74,7 @@ ALIVE.buildCover = function(){
     if(im.instanceColor) im.instanceColor.needsUpdate=true;
     im.castShadow=false; im.receiveShadow=true;
     WORLD.scene.add(im);
+    ALIVE.coverMeshes.push({im, base:im.material.color.clone(), kind});
     return placed;
   };
   const n = scatter("tuft",240,mats.tuft,{y:0.16})
@@ -341,8 +343,9 @@ ALIVE.update = function(dt){
     }
   }
 
-  /* butterflies (daylight only) */
-  const day=CYCLE&&(CYCLE.phase==="morning"||CYCLE.phase==="afternoon");
+  /* butterflies (daylight only, and they winter elsewhere) */
+  const day=CYCLE&&(CYCLE.phase==="morning"||CYCLE.phase==="afternoon")
+    && !(typeof SEASONS!=="undefined" && SEASONS.current==="winter");
   for(const bf of ALIVE.butterflies){
     bf.g.visible=!!day;
     if(!day) continue;
