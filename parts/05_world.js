@@ -211,6 +211,7 @@ function buildBackdrop(scene){
     g.rotation.y=rand(Math.PI*2);
     scene.add(g);
     WORLD.addCollider(x-0.5,z-0.5,x+0.5,z+0.5);
+    (WORLD.props.treeSpots=WORLD.props.treeSpots||[]).push({x,z});
     return g;
   };
   // scatter around the lot edges & mountain — keep lot + road + trail + crick clear

@@ -2,7 +2,7 @@
 /* PUB — taps, pricing, customers, reactions, and the ficus that has seen things */
 
 const PUB = {
-  customers:[], tapMeshes:[null,null], spawnT:4, joeCame:false, pourLock:0, freezeT:0,
+  customers:[], tapMeshes:[null,null], spawnT:4, joeCame:false, pourLock:0, freezeT:0, lastPourTap:-1,
 };
 
 function removeRig(rig){
@@ -26,7 +26,7 @@ PUB.walk = function(c, tx, tz, dt, speed){
   r.facing=angLerp(r.facing,Math.atan2(vx,vz),Math.min(1,10*dt));
   r.speedNow=sp;
   r.group.position.set(r.x,r.y,r.z);
-  if(c.drunk>0){ r.group.rotation.z=Math.sin(CLAY.t*4+c.seed)*0.08*c.drunk; if(Math.random()<dt*0.25*c.drunk){ SFX.play("hiccup",r.x,r.z); r.squash=0.15; } }
+  if(c.drunk>0){ r.group.rotation.z=Math.sin(CLAY.t*4+c.seed)*0.08*c.drunk; if(Math.random()<dt*0.25*c.drunk){ SFX.play("hiccup",r.x,r.z); r.squash=0.15; if(typeof ALIVE!=="undefined") ALIVE.bubble(r.x, r.y+2.0, r.z, "hic"); } }
   return false;
 };
 
@@ -168,6 +168,7 @@ PUB.serve = function(c){
   const T=G_STATE.taps[c.chosen];
   if(!T||!T.beer||T.pints<=0){ c.chosen=-1; return; }
   PUB.pourLock=0.9;
+  PUB.lastPourTap=c.chosen;
   SFX.play("pour",c.rig.x,c.rig.z);
   T.pints--;
   const paid = c.type==="joe"? T.price*3 : T.price;
@@ -238,11 +239,13 @@ PUB.finishDrink = function(c){
   } else if(beer.tier==="great"){
     for(let i=0;i<4;i++) puff(r.x+rand(-.4,.4), r.y+2.3, r.z+rand(-.4,.4), 0xff9ad2, 0.18, 1, 1);
     SFX.play("burp",r.x,r.z);
+    if(typeof ALIVE!=="undefined") ALIVE.burp(r.x, r.y+2.1, r.z, true);
     UI.bubbleRig(r, pick(["dang GOOD","*happy burp*","another!"]), 2000);
     ECON.earn(c.paidPrice*0.4*c.def.tipMul,"tips");
     STORY.fame(3*fm,"great pint");
   } else if(beer.tier==="good"){
     SFX.play("burp",r.x,r.z);
+    if(typeof ALIVE!=="undefined") ALIVE.burp(r.x, r.y+2.0, r.z, false);
     if(Math.random()<0.5) UI.bubbleRig(r, pick(["not bad!","hits the spot","yep. beer."]), 1800);
     ECON.earn(c.paidPrice*0.2*c.def.tipMul,"tips");
     STORY.fame(2*fm,"good pint");

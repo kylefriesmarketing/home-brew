@@ -1,9 +1,38 @@
-# HOME BREW — dev notes (v0.9, content-complete campaign)
+# HOME BREW — dev notes (v1.0, content-complete campaign)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v1.0 — THE ART & ALIVE PASS (`19_post.js` + `20_alive.js`, all free)
+
+- 🎞️ **Miniature film look** (`19_post.js`, Age of Toys architecture): scene →
+  HDR MSAA RT → bloom (¼, threshold 1.0 — HDR headroom IS the gate) + defocus
+  (½) → composite w/ tilt band + warm grade + vignette + ACES/sRGB **in the
+  composite shader** (tone mapping only fires on canvas renders — that's the
+  whole trick). `POST.enabled=false` to toggle; auto-resizes via checkSize().
+  0 config, WebGL2-gated, plain-render fallback. ~3.8ms/frame all-in.
+  String lights/fireflies/neon get >1.0 colour boosts so bloom finds them —
+  the night pub shot finally glows like it always wanted to.
+- 🌿 **Ground cover**: 536 instanced tufts/clover/flowers/pebbles/mushrooms
+  (5 draw calls), rule-based placement mirroring the terrain painter's zones
+  (roads/paths/lots/crick/rock-line all excluded), mushrooms cluster at trees.
+- 🐿️ **Critters**: 2 squirrels dashing tree-to-tree (flee you), 3 fence birds
+  that scatter when approached, 3 daytime butterflies, and a raccoon who cases
+  the dumpster after dark (scurries if you close in).
+- 🛻 **Neighbors**: pickup trucks rattle down the road (~2min cadence, dust +
+  positional putt-putt), **Copperhead visibly putters at his still** across the
+  crick all day and his window glows amber at night.
+- 🐈 **Pub life**: dartboard, mounted trout, antlers on the wall; three table
+  lanterns that flicker alive at dusk; and a pub cat who naps on the bar,
+  lifts her head when you come close, and occasionally hops to a new spot.
+- 🍺 **Beer physics VFX**: visible pour stream at the taps with foam spatter,
+  idle-tap drips, foam heads that wobble as drinkers work them down, hiccup
+  bubbles that float up and pop, and burp clouds (bigger for better beer) that
+  drift, wobble, and POP into mini puffs.
+⚠️ Staged-screenshot lesson: don't spawn a burp cloud in front of the lens and
+then spend ten minutes debugging the "giant white blob".
 
 ## New in v0.9 — BARLEYCORN BOB VISITS + the Bottling Line
 

@@ -232,7 +232,12 @@ MAIN.tick = function(dt, skipRender){
   puffsUpdate(dt);
   SFX.update(dt);
 
-  if(!MAIN.started){ MAIN.titleCam(dt); if(!skipRender) WORLD.renderer.render(WORLD.scene, WORLD.camera); return; }
+  if(!MAIN.started){
+    MAIN.titleCam(dt);
+    if(typeof ALIVE!=="undefined") ALIVE.update(dt);
+    if(!skipRender){ if(typeof POST!=="undefined"&&POST.ok) POST.render(); else WORLD.renderer.render(WORLD.scene, WORLD.camera); }
+    return;
+  }
 
   if(CYCLE) CYCLE.update(dt);
   MAIN.updatePlayer(dt);
@@ -246,6 +251,7 @@ MAIN.tick = function(dt, skipRender){
   if(typeof WINGS!=="undefined") WINGS.update(dt);
   if(typeof EVENTS!=="undefined") EVENTS.update(dt);
   if(typeof HOMESTEAD!=="undefined") HOMESTEAD.update(dt);
+  if(typeof ALIVE!=="undefined") ALIVE.update(dt);
   UI.update(dt);
 
   if(MAIN.mode==="walk"||MAIN.mode==="fork") MAIN.scanInteract();
@@ -259,7 +265,7 @@ MAIN.tick = function(dt, skipRender){
     if(MAIN.mode==="walk") MAIN.dropCarry(MAIN.input.run);
   }
   MAIN.updateCamera(dt);
-  if(!skipRender) WORLD.renderer.render(WORLD.scene, WORLD.camera);
+  if(!skipRender){ if(typeof POST!=="undefined"&&POST.ok) POST.render(); else WORLD.renderer.render(WORLD.scene, WORLD.camera); }
 };
 
 /* ---------- boot ---------- */
@@ -284,6 +290,8 @@ MAIN.boot = function(){
   if(typeof WINGS!=="undefined") WINGS.setup();
   if(typeof EVENTS!=="undefined") EVENTS.setup();
   if(typeof HOMESTEAD!=="undefined") HOMESTEAD.setup();
+  if(typeof POST!=="undefined") POST.setup();
+  if(typeof ALIVE!=="undefined") ALIVE.setup();
   UI.setup();
 
   let last=performance.now();
