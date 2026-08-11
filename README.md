@@ -1,9 +1,52 @@
-# HOME BREW — dev notes (v1.4, content-complete campaign)
+# HOME BREW — dev notes (v1.5, content-complete campaign)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v1.5 — **MILESTONE 1 of 6: FINISH THE LOOK** ✅
+
+Plan agreed with Kyle: **M1 Look → M2 Equation → M3 Appetites → M4 Tension →
+M5 Presence → M6 Hardening.** Full ratio→style restructure confirmed for M2;
+saves may break; build to the highest quality bar.
+
+- 🔭 **Depth-correct focus, replacing the fake tilt-shift.** The old band was
+  screen-space and fixed (`bandCenter 0.52`) — a wall at the top of frame blurred
+  while a mountain at screen-centre stayed razor sharp, and the subject drifted
+  out of the band constantly. `sceneRT` now carries a `DepthTexture` (three
+  blit-resolves it, so **MSAA is kept**), and the composite computes a real
+  circle of confusion from world distance, focused on whatever the camera is
+  looking at. Depth resolve verified by rendering the buffer directly:
+  far 110 / mid 68 / near 49 — a clean gradient.
+  ⚠️ `focusRange` is in WORLD UNITS; a thin sharp slab is what reads as miniature.
+- 🎞️ **The film pass** — it was a clean digital render before. Gate weave
+  (sub-pixel frame shift) and ±1.2% exposure flicker, both on the **exposure
+  clock, not per frame** (film moves once per photographed frame); halation
+  bleeding warm red-orange through the highlights; animated grain applied in
+  **scene-linear before the tone map**, luminance-weighted so it lives in the
+  shadows; and radial chromatic aberration in the corners only.
+- 🫗 **Clay clearcoat + fake subsurface.** `clayMat` is now
+  `MeshPhysicalMaterial` with a dim broad `clearcoat 0.08` (damp clay, never a
+  hotspot), plus a Zucconi-style wrap-diffuse term patched in via
+  `onBeforeCompile` so backlit edges glow warm — the strongest "this material is
+  soft" cue there is. **Verified contributing: 76 materials patched, luma
+  98.9 (off) → 102.3 (shipped) → 112.1 (strong).**
+- 🦶 **Feet stopped skating.** Boots only translated in Z, so they slid like the
+  character was on ice. They now lift on the swing and the ankle rolls.
+  Measured: 15 distinct heights over 24 frames, 0.109 range.
+- 🤲 **Carry IK — the most-seen pose in the game.** The carry was a FIXED arm
+  rotation while the item damped independently to a point in front of the chest,
+  so hands and cargo were never connected and a heavy crate floated with hands
+  nowhere near it. Arms now aim at the actual item and the grip widens with its
+  radius. Measured: arm pitch −1.34 vs computed aim −1.15.
+- 🙂 **Head glances eased.** `p.head.rotation.y = rand(...)` assigned outright,
+  so heads TELEPORTED between angles. Now a damped target: **0 snap frames in 50.**
+- 💫 **Anticipation + overshoot** on the arms (every motion was a direct `sin()`),
+  and **`claySquash` — written, documented, and never called — is finally wired.**
+
+⚠️ Still open in M1: armature seam lines (dark crease at limb joints via vertex
+colour). Everything else in the assessment's Phase A is done.
 
 ## New in v1.4 — CLAY, FOR REAL + two game-breaking fixes
 

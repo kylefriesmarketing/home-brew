@@ -111,13 +111,29 @@ function animatePerson(rig, dt){
   const bob=Math.abs(Math.sin(wp*6))* clamp(sp/5,0,1) * 0.12;
 
   p.legL.rotation.x=swing; p.legR.rotation.x=-swing;
-  p.bootL.position.z=0.05+Math.sin(wp*6)*0.14*clamp(sp/5,0,1);
-  p.bootR.position.z=0.05-Math.sin(wp*6)*0.14*clamp(sp/5,0,1);
+  /* FEET USED TO SKATE — boots only translated in Z, so they slid along the
+     ground like the character was on ice. A real step LIFTS and the ankle
+     rolls: the foot swinging FORWARD rises, the planted one stays down. */
+  const gait=clamp(sp/5,0,1), sw=Math.sin(wp*6);
+  p.bootL.position.z=0.05+sw*0.14*gait;
+  p.bootR.position.z=0.05-sw*0.14*gait;
+  const liftL=Math.max(0, sw)*0.11*gait, liftR=Math.max(0,-sw)*0.11*gait;
+  p.bootL.position.y=(p.bootL.userData.baseY??p.bootL.position.y)+liftL;
+  p.bootR.position.y=(p.bootR.userData.baseY??p.bootR.position.y)+liftR;
+  if(p.bootL.userData.baseY===undefined) p.bootL.userData.baseY=p.bootL.position.y-liftL;
+  if(p.bootR.userData.baseY===undefined) p.bootR.userData.baseY=p.bootR.position.y-liftR;
+  p.bootL.rotation.x=-swing*0.55;      // ankle roll: toe down on the swing
+  p.bootR.rotation.x= swing*0.55;
 
   const carry=rig.carryPose, heavy=rig.heavyPose;
   const armSwing=swing*0.8*(1-carry);
-  p.armL.rotation.x=-armSwing - carry*(1.4+heavy*0.3);
-  p.armR.rotation.x=armSwing - carry*(1.4+heavy*0.3);
+  /* ANTICIPATION + OVERSHOOT — arms lag the body by a beat instead of snapping
+     to a target. Every motion in here used to be a direct sin(). */
+  rig._armT = damp(rig._armT??0, -armSwing - carry*(1.4+heavy*0.3), 14, dt);
+  const over = (rig._armT - (rig._armP??rig._armT)) * 2.2;    // velocity → overshoot
+  rig._armP = rig._armT;
+  p.armL.rotation.x = rig._armT + over;
+  p.armR.rotation.x = (armSwing - carry*(1.4+heavy*0.3)) + over*0.6;
   p.armL.rotation.z= 0.12+carry*0.25; p.armR.rotation.z=-0.12-carry*0.25;
 
   p.body.position.y=rig.baseBodyY+bob - heavy*0.1;
@@ -128,13 +144,19 @@ function animatePerson(rig, dt){
   // idle breathe + glance
   if(sp<0.4){
     p.body.scale.y = (p.body.userData.sy??1) * (1+Math.sin(t*2.2+g.position.x)*0.02);
-    if(Math.random()<dt*0.4) p.head.rotation.y = rand(-0.6,0.6);
-  } else p.head.rotation.y = damp(p.head.rotation.y,0,6,dt);
+    /* the glance used to TELEPORT — rotation.y was assigned outright, so heads
+       snapped between angles. Pick a target, then ease toward it. */
+    if(Math.random()<dt*0.4) rig._glance = rand(-0.6,0.6);
+    p.head.rotation.y = damp(p.head.rotation.y, rig._glance??0, 4, dt);
+  } else { rig._glance=0; p.head.rotation.y = damp(p.head.rotation.y,0,6,dt); }
 
   // squash & stretch
   rig.squash=damp(rig.squash,0,9,dt);
   g.scale.y=(rig.groupScale??1)*(1-rig.squash);
   g.scale.x=g.scale.z=(rig.groupScale??1)*(1+rig.squash*0.55);
+  /* claySquash was written, documented, and NEVER CALLED. Any prop can now set
+     userData.squash and get free secondary motion. */
+  claySquash(p.body, dt); claySquash(p.head, dt);
 
   // green face (bad beer)
   if(rig.greenT>0){ rig.greenT-=dt; p.head.material=rig.greenMat; }

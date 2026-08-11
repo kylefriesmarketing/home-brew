@@ -149,6 +149,26 @@ ITEMS.update = function(dt){
       it.vx=rig.vx; it.vz=rig.vz; it.vy=0;
       it.mesh.position.set(it.x,it.y,it.z);
       it.mesh.rotation.set(0,it.rot, Math.sin(CLAY.t*7)*0.04*(1+heavy));
+      /* IK-LITE: the carry pose used to be a FIXED arm rotation while the item
+         damped independently to a point in front of the chest — so the hands
+         and the cargo were never actually connected, and a heavy crate floated
+         with hands nowhere near it. Aim the arms AT the thing being carried.
+         Runs after animatePerson, so this write wins for the frame. */
+      const pa=rig.parts;
+      if(pa && pa.armL && pa.armR){
+        const sh=pa.armL.parent || rig.group;
+        sh.updateMatrixWorld(true);
+        const sp=new THREE.Vector3(); pa.armL.getWorldPosition(sp);
+        const fwd=Math.hypot(it.x-rig.x, it.z-rig.z);
+        const dy=it.y-sp.y;
+        const pitch=-Math.atan2(Math.max(fwd,0.01), -dy);
+        pa.armL.rotation.x=damp(pa.armL.rotation.x, pitch, 16, dt);
+        pa.armR.rotation.x=damp(pa.armR.rotation.x, pitch, 16, dt);
+        /* hands converge on the cargo's width */
+        const grip=0.1+ (it.r||0.3)*0.35;
+        pa.armL.rotation.z=damp(pa.armL.rotation.z,  grip, 14, dt);
+        pa.armR.rotation.z=damp(pa.armR.rotation.z, -grip, 14, dt);
+      }
       continue;
     }
     // free physics

@@ -210,11 +210,41 @@ function clayMat(color, opts={}){
   const key = color + "|" + JSON.stringify(opts);
   if(_matCache[key]) return _matCache[key];
   buildClayTextures();
-  const m = new THREE.MeshStandardMaterial(Object.assign({
+  /* MeshPhysicalMaterial for the CLEARCOAT — damp clay carries a thin sheen
+     layer. Kept broad and dim (never a hotspot): that's the difference between
+     "modelling clay" and "wet plastic". */
+  const m = new THREE.MeshPhysicalMaterial(Object.assign({
     color, roughness: 0.88, metalness: 0,
     normalMap: CLAYTEX.normal, roughnessMap: CLAYTEX.rough,
+    clearcoat: 0.08, clearcoatRoughness: 0.6,
   }, opts));
   if(m.normalScale) m.normalScale.set(0.8,0.8);
+
+  /* FAKE SUBSURFACE — backlit clay glowing warm at the thin bits (ears,
+     fingers, hat brims) is the strongest "this material is soft" cue there is.
+     Zucconi's wrap-diffuse term, patched into the lighting via onBeforeCompile
+     so we keep all of three's shadows/tone mapping for free. */
+  m.onBeforeCompile = (sh)=>{
+    sh.uniforms.sssColor = { value: new THREE.Color(0.55,0.20,0.12) };
+    sh.uniforms.sssPower = { value: 0.55 };
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+        uniform vec3 sssColor; uniform float sssPower;`)
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+        #if NUM_DIR_LIGHTS > 0
+        {
+          vec3 V = normalize( vViewPosition );
+          vec3 Ldir = normalize( directionalLights[0].direction );
+          // light travelling THROUGH the surface toward the eye
+          float wrap = pow( clamp( dot( V, -Ldir ), 0.0, 1.0 ), 3.0 );
+          float thin = 1.0 - abs( dot( normalize( normal ), V ) );   // thin at grazing angles
+          reflectedLight.indirectDiffuse += diffuseColor.rgb * sssColor *
+            ( wrap * 0.75 + thin * 0.25 ) * sssPower * directionalLights[0].color;
+        }
+        #endif`);
+    m.userData.shader = sh;
+  };
+  m.customProgramCacheKey = ()=>"claySSS";
   _matCache[key] = m; return m;
 }
 

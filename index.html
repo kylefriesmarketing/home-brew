@@ -154,7 +154,7 @@ kbd{background:#3a3128;color:#ffd98a;border-radius:4px;border:1px solid #6b4a2f;
     <div class="credit">a Dirty Boy Devs joint · The Room</div>
   </div>
   <div class="bigfade" id="fade"></div>
-  <div id="verchip">home brew v1.4</div>
+  <div id="verchip">home brew v1.5</div>
 </div>
 <script>
 (function(){
@@ -53953,11 +53953,41 @@ function clayMat(color, opts={}){
   const key = color + "|" + JSON.stringify(opts);
   if(_matCache[key]) return _matCache[key];
   buildClayTextures();
-  const m = new THREE.MeshStandardMaterial(Object.assign({
+  /* MeshPhysicalMaterial for the CLEARCOAT — damp clay carries a thin sheen
+     layer. Kept broad and dim (never a hotspot): that's the difference between
+     "modelling clay" and "wet plastic". */
+  const m = new THREE.MeshPhysicalMaterial(Object.assign({
     color, roughness: 0.88, metalness: 0,
     normalMap: CLAYTEX.normal, roughnessMap: CLAYTEX.rough,
+    clearcoat: 0.08, clearcoatRoughness: 0.6,
   }, opts));
   if(m.normalScale) m.normalScale.set(0.8,0.8);
+
+  /* FAKE SUBSURFACE — backlit clay glowing warm at the thin bits (ears,
+     fingers, hat brims) is the strongest "this material is soft" cue there is.
+     Zucconi's wrap-diffuse term, patched into the lighting via onBeforeCompile
+     so we keep all of three's shadows/tone mapping for free. */
+  m.onBeforeCompile = (sh)=>{
+    sh.uniforms.sssColor = { value: new THREE.Color(0.55,0.20,0.12) };
+    sh.uniforms.sssPower = { value: 0.55 };
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+        uniform vec3 sssColor; uniform float sssPower;`)
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+        #if NUM_DIR_LIGHTS > 0
+        {
+          vec3 V = normalize( vViewPosition );
+          vec3 Ldir = normalize( directionalLights[0].direction );
+          // light travelling THROUGH the surface toward the eye
+          float wrap = pow( clamp( dot( V, -Ldir ), 0.0, 1.0 ), 3.0 );
+          float thin = 1.0 - abs( dot( normalize( normal ), V ) );   // thin at grazing angles
+          reflectedLight.indirectDiffuse += diffuseColor.rgb * sssColor *
+            ( wrap * 0.75 + thin * 0.25 ) * sssPower * directionalLights[0].color;
+        }
+        #endif`);
+    m.userData.shader = sh;
+  };
+  m.customProgramCacheKey = ()=>"claySSS";
   _matCache[key] = m; return m;
 }
 
@@ -54895,13 +54925,29 @@ function animatePerson(rig, dt){
   const bob=Math.abs(Math.sin(wp*6))* clamp(sp/5,0,1) * 0.12;
 
   p.legL.rotation.x=swing; p.legR.rotation.x=-swing;
-  p.bootL.position.z=0.05+Math.sin(wp*6)*0.14*clamp(sp/5,0,1);
-  p.bootR.position.z=0.05-Math.sin(wp*6)*0.14*clamp(sp/5,0,1);
+  /* FEET USED TO SKATE — boots only translated in Z, so they slid along the
+     ground like the character was on ice. A real step LIFTS and the ankle
+     rolls: the foot swinging FORWARD rises, the planted one stays down. */
+  const gait=clamp(sp/5,0,1), sw=Math.sin(wp*6);
+  p.bootL.position.z=0.05+sw*0.14*gait;
+  p.bootR.position.z=0.05-sw*0.14*gait;
+  const liftL=Math.max(0, sw)*0.11*gait, liftR=Math.max(0,-sw)*0.11*gait;
+  p.bootL.position.y=(p.bootL.userData.baseY??p.bootL.position.y)+liftL;
+  p.bootR.position.y=(p.bootR.userData.baseY??p.bootR.position.y)+liftR;
+  if(p.bootL.userData.baseY===undefined) p.bootL.userData.baseY=p.bootL.position.y-liftL;
+  if(p.bootR.userData.baseY===undefined) p.bootR.userData.baseY=p.bootR.position.y-liftR;
+  p.bootL.rotation.x=-swing*0.55;      // ankle roll: toe down on the swing
+  p.bootR.rotation.x= swing*0.55;
 
   const carry=rig.carryPose, heavy=rig.heavyPose;
   const armSwing=swing*0.8*(1-carry);
-  p.armL.rotation.x=-armSwing - carry*(1.4+heavy*0.3);
-  p.armR.rotation.x=armSwing - carry*(1.4+heavy*0.3);
+  /* ANTICIPATION + OVERSHOOT — arms lag the body by a beat instead of snapping
+     to a target. Every motion in here used to be a direct sin(). */
+  rig._armT = damp(rig._armT??0, -armSwing - carry*(1.4+heavy*0.3), 14, dt);
+  const over = (rig._armT - (rig._armP??rig._armT)) * 2.2;    // velocity → overshoot
+  rig._armP = rig._armT;
+  p.armL.rotation.x = rig._armT + over;
+  p.armR.rotation.x = (armSwing - carry*(1.4+heavy*0.3)) + over*0.6;
   p.armL.rotation.z= 0.12+carry*0.25; p.armR.rotation.z=-0.12-carry*0.25;
 
   p.body.position.y=rig.baseBodyY+bob - heavy*0.1;
@@ -54912,13 +54958,19 @@ function animatePerson(rig, dt){
   // idle breathe + glance
   if(sp<0.4){
     p.body.scale.y = (p.body.userData.sy??1) * (1+Math.sin(t*2.2+g.position.x)*0.02);
-    if(Math.random()<dt*0.4) p.head.rotation.y = rand(-0.6,0.6);
-  } else p.head.rotation.y = damp(p.head.rotation.y,0,6,dt);
+    /* the glance used to TELEPORT — rotation.y was assigned outright, so heads
+       snapped between angles. Pick a target, then ease toward it. */
+    if(Math.random()<dt*0.4) rig._glance = rand(-0.6,0.6);
+    p.head.rotation.y = damp(p.head.rotation.y, rig._glance??0, 4, dt);
+  } else { rig._glance=0; p.head.rotation.y = damp(p.head.rotation.y,0,6,dt); }
 
   // squash & stretch
   rig.squash=damp(rig.squash,0,9,dt);
   g.scale.y=(rig.groupScale??1)*(1-rig.squash);
   g.scale.x=g.scale.z=(rig.groupScale??1)*(1+rig.squash*0.55);
+  /* claySquash was written, documented, and NEVER CALLED. Any prop can now set
+     userData.squash and get free secondary motion. */
+  claySquash(p.body, dt); claySquash(p.head, dt);
 
   // green face (bad beer)
   if(rig.greenT>0){ rig.greenT-=dt; p.head.material=rig.greenMat; }
@@ -55150,6 +55202,26 @@ ITEMS.update = function(dt){
       it.vx=rig.vx; it.vz=rig.vz; it.vy=0;
       it.mesh.position.set(it.x,it.y,it.z);
       it.mesh.rotation.set(0,it.rot, Math.sin(CLAY.t*7)*0.04*(1+heavy));
+      /* IK-LITE: the carry pose used to be a FIXED arm rotation while the item
+         damped independently to a point in front of the chest — so the hands
+         and the cargo were never actually connected, and a heavy crate floated
+         with hands nowhere near it. Aim the arms AT the thing being carried.
+         Runs after animatePerson, so this write wins for the frame. */
+      const pa=rig.parts;
+      if(pa && pa.armL && pa.armR){
+        const sh=pa.armL.parent || rig.group;
+        sh.updateMatrixWorld(true);
+        const sp=new THREE.Vector3(); pa.armL.getWorldPosition(sp);
+        const fwd=Math.hypot(it.x-rig.x, it.z-rig.z);
+        const dy=it.y-sp.y;
+        const pitch=-Math.atan2(Math.max(fwd,0.01), -dy);
+        pa.armL.rotation.x=damp(pa.armL.rotation.x, pitch, 16, dt);
+        pa.armR.rotation.x=damp(pa.armR.rotation.x, pitch, 16, dt);
+        /* hands converge on the cargo's width */
+        const grip=0.1+ (it.r||0.3)*0.35;
+        pa.armL.rotation.z=damp(pa.armL.rotation.z,  grip, 14, dt);
+        pa.armR.rotation.z=damp(pa.armR.rotation.z, -grip, 14, dt);
+      }
       continue;
     }
     // free physics
@@ -59441,8 +59513,15 @@ BUS.on("newday", ()=>{ if(G_STATE){ HOMESTEAD.bottleRun(); HOMESTEAD.bobPress();
 
 const POST = {
   ok:false, enabled:true,
-  p:{ bloomStr:0.35, bloomThresh:1.0, blurMax:0.45, bandCenter:0.52, bandHalf:0.30,
-      bandSoft:0.45, vignette:0.26, sat:1.07, warmth:0.035, lift:1.0 },
+  p:{ bloomStr:0.35, bloomThresh:1.0, blurMax:0.68, vignette:0.26, sat:1.07,
+      warmth:0.035, lift:1.0,
+      /* DEPTH focus (replaces the fixed screen band — a wall at the top of frame
+         used to blur while a mountain at screen-centre stayed razor sharp).
+         focusRange is in WORLD UNITS: a thin sharp plane is what makes a real
+         macro shot read as miniature. */
+      focusRange:8.0, focusBias:0.0, coCPow:1.3,
+      /* film */
+      grain:0.035, halation:0.5, ca:0.9, weave:0.9, flicker:0.012 },
 };
 
 POST.setup = function(){
@@ -59453,6 +59532,10 @@ POST.setup = function(){
     type:THREE.HalfFloatType, samples:samples||0,
     minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter, depthBuffer:!!samples });
   POST.sceneRT=mk(size.x,size.y,4);
+  /* depth attachment so focus can be computed from real distance. three
+     blit-resolves the multisampled depth into this texture, so we keep MSAA. */
+  POST.sceneRT.depthTexture=new THREE.DepthTexture(size.x,size.y);
+  POST.sceneRT.depthTexture.type=THREE.UnsignedIntType;
   POST.defA=mk(size.x>>1,size.y>>1); POST.defB=mk(size.x>>1,size.y>>1);
   POST.bloomA=mk(size.x>>2,size.y>>2); POST.bloomB=mk(size.x>>2,size.y>>2);
   POST.w=size.x; POST.h=size.y;
@@ -59487,27 +59570,69 @@ POST.setup = function(){
   POST.matBlur.toneMapped=false;
 
   POST.matComp=new THREE.ShaderMaterial({ uniforms:{
-      tSharp:{value:null}, tBlur:{value:null}, tBloom:{value:null},
-      bloomStr:{value:0.35}, bandCenter:{value:0.52}, bandHalf:{value:0.30}, bandSoft:{value:0.45},
-      blurMax:{value:0.45}, vig:{value:0.26}, sat:{value:1.07}, warmth:{value:0.035}, lift:{value:1.0} },
+      tSharp:{value:null}, tBlur:{value:null}, tBloom:{value:null}, tDepth:{value:null},
+      bloomStr:{value:0.35}, blurMax:{value:0.55}, vig:{value:0.26},
+      sat:{value:1.07}, warmth:{value:0.035}, lift:{value:1.0},
+      camNear:{value:0.1}, camFar:{value:400.0},
+      focusDist:{value:16.0}, focusRange:{value:7.0}, coCPow:{value:1.35},
+      grainAmt:{value:0.035}, halation:{value:0.5}, caAmt:{value:0.9},
+      weaveAmt:{value:0.9}, flicker:{value:0.0}, expo:{value:1.0}, texel:{value:new THREE.Vector2()} },
     vertexShader:vsh, fragmentShader:`
+    #include <packing>
     varying vec2 vUv;
-    uniform sampler2D tSharp; uniform sampler2D tBlur; uniform sampler2D tBloom;
-    uniform float bloomStr, bandCenter, bandHalf, bandSoft, blurMax, vig, sat, warmth, lift;
+    uniform sampler2D tSharp; uniform sampler2D tBlur; uniform sampler2D tBloom; uniform sampler2D tDepth;
+    uniform float bloomStr, blurMax, vig, sat, warmth, lift;
+    uniform float camNear, camFar, focusDist, focusRange, coCPow;
+    uniform float grainAmt, halation, caAmt, weaveAmt, flicker, expo;
+    uniform vec2 texel;
+
+    float linDepth(vec2 uv){
+      float d=texture2D(tDepth,uv).x;
+      return -perspectiveDepthToViewZ(d, camNear, camFar);   // distance in WORLD units
+    }
+    float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+
     void main(){
-      vec3 sharp=texture2D(tSharp,vUv).rgb;
-      vec3 soft=texture2D(tBlur,vUv).rgb;
-      float d=abs(vUv.y-bandCenter);
-      float f=smoothstep(bandHalf, bandHalf+bandSoft, d)*blurMax;   // tilt-shift falloff
-      vec3 c=mix(sharp,soft,f);
-      c+=texture2D(tBloom,vUv).rgb*bloomStr;
-      c*=lift;
-      c.r*=1.0+warmth; c.b*=1.0-warmth*0.8;                          // lamp-warm grade
+      /* GATE WEAVE — the film gate never registers perfectly twice. Sub-pixel
+         shift on the exposure clock; the whole frame moves together. */
+      vec2 uv = vUv + vec2(weaveAmt,weaveAmt*0.7)*texel*flicker;
+
+      /* CIRCLE OF CONFUSION from real distance. Depth of field shrinks as
+         magnification grows — that's the physical fact miniatures exploit, and
+         a fixed screen band cannot express it. */
+      float dist=linDepth(uv);
+      float coc=clamp(abs(dist-focusDist)/max(focusRange,0.001),0.0,1.0);
+      coc=pow(coc,coCPow)*blurMax;
+
+      vec3 sharp=texture2D(tSharp,uv).rgb;
+      /* radial chromatic aberration, corners only, sub-pixel */
+      vec2 dir=(uv-0.5);
+      float rad=dot(dir,dir);
+      vec2 caO=dir*rad*caAmt*texel*2.0;
+      sharp.r=texture2D(tSharp,uv+caO).r;
+      sharp.b=texture2D(tSharp,uv-caO).b;
+
+      vec3 soft=texture2D(tBlur,uv).rgb;
+      vec3 c=mix(sharp,soft,coc);
+
+      vec3 bl=texture2D(tBloom,uv).rgb;
+      c+=bl*bloomStr;
+      /* HALATION — light bleeding warm through the emulsion backing */
+      c+=bl*vec3(1.0,0.42,0.16)*halation;
+
+      c*=lift*expo;                                    // exposure flicker
+      c.r*=1.0+warmth; c.b*=1.0-warmth*0.8;
       float l=dot(c,vec3(0.2126,0.7152,0.0722));
       c=mix(vec3(l),c,sat);
-      float vd=distance(vUv,vec2(0.5));
+
+      /* GRAIN in scene-linear BEFORE the tone map, luminance-weighted so it
+         lives in the shadows the way real stock does */
+      float g=hash(uv*vec2(1024.0,1024.0)+flicker*37.0)-0.5;
+      c+=g*grainAmt*(1.0-smoothstep(0.0,0.85,l))*max(l,0.06);
+
+      float vd=distance(uv,vec2(0.5));
       c*=1.0-smoothstep(0.42,0.86,vd)*vig;
-      gl_FragColor=vec4(c,1.0);
+      gl_FragColor=vec4(max(c,0.0),1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`,
@@ -59521,6 +59646,11 @@ POST.checkSize = function(){
   const R=WORLD.renderer, s=new THREE.Vector2(); R.getDrawingBufferSize(s);
   if(s.x===POST.w && s.y===POST.h) return;
   POST.w=s.x; POST.h=s.y;
+  if(POST.sceneRT.depthTexture){                   // keep the depth attachment in step
+    POST.sceneRT.depthTexture.image.width=s.x;
+    POST.sceneRT.depthTexture.image.height=s.y;
+    POST.sceneRT.depthTexture.needsUpdate=true;
+  }
   POST.sceneRT.setSize(s.x,s.y);
   POST.defA.setSize(s.x>>1,s.y>>1); POST.defB.setSize(s.x>>1,s.y>>1);
   POST.bloomA.setSize(s.x>>2,s.y>>2); POST.bloomB.setSize(s.x>>2,s.y>>2);
@@ -59563,9 +59693,23 @@ POST.render = function(){
   /* composite to canvas (tone map + sRGB happen HERE) */
   const u=POST.matComp.uniforms;
   u.tSharp.value=POST.sceneRT.texture; u.tBlur.value=POST.defA.texture; u.tBloom.value=POST.bloomA.texture;
-  u.bloomStr.value=p.bloomStr; u.bandCenter.value=p.bandCenter; u.bandHalf.value=p.bandHalf;
-  u.bandSoft.value=p.bandSoft; u.blurMax.value=p.blurMax; u.vig.value=p.vignette;
+  u.tDepth.value=POST.sceneRT.depthTexture;
+  u.bloomStr.value=p.bloomStr; u.blurMax.value=p.blurMax; u.vig.value=p.vignette;
   u.sat.value=p.sat; u.warmth.value=p.warmth; u.lift.value=p.lift;
+  const cam=WORLD.camera;
+  u.camNear.value=cam.near; u.camFar.value=cam.far;
+  /* focus rides the thing the camera is actually looking at */
+  u.focusDist.value=(typeof MAIN!=="undefined" && MAIN.camTarget)
+    ? cam.position.distanceTo(MAIN.camTarget)+p.focusBias : 16;
+  u.focusRange.value=p.focusRange; u.coCPow.value=p.coCPow;
+  u.grainAmt.value=p.grain; u.halation.value=p.halation; u.caAmt.value=p.ca; u.weaveAmt.value=p.weave;
+  /* weave + exposure flicker step on the EXPOSURE clock, not per frame —
+     film moves once per photographed frame, not 60 times a second */
+  const fr=(typeof CLAY!=="undefined")?CLAY.frame:0;
+  const h=(n)=>{ const s=Math.sin(n*127.1)*43758.5453; return s-Math.floor(s); };
+  u.flicker.value=(h(fr)-0.5)*2.0;
+  u.expo.value=1.0+(h(fr+13.7)-0.5)*2.0*p.flicker;
+  u.texel.value.set(1/POST.w, 1/POST.h);
   POST.quad.material=POST.matComp;
   R.setRenderTarget(null);
   R.render(POST.qscene,POST.qcam);
