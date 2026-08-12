@@ -154,7 +154,7 @@ kbd{background:#3a3128;color:#ffd98a;border-radius:4px;border:1px solid #6b4a2f;
     <div class="credit">a Dirty Boy Devs joint · The Room</div>
   </div>
   <div class="bigfade" id="fade"></div>
-  <div id="verchip">home brew v1.9</div>
+  <div id="verchip">home brew v2.0</div>
 </div>
 <script>
 (function(){
@@ -54234,13 +54234,47 @@ WORLD.getH = function(x, z){
   return h;
 };
 
-WORLD.addCollider = (x1,z1,x2,z2,id)=> WORLD.colliders.push({x1:Math.min(x1,x2),z1:Math.min(z1,z2),x2:Math.max(x1,x2),z2:Math.max(z1,z2),id});
-WORLD.dropCollider = id => { WORLD.colliders=WORLD.colliders.filter(c=>c.id!==id); };
+/* ⚠️ M6 — WORLD.collide tested EVERY collider (~135 of them) for the player and
+   for every loose item, every frame: 5,400+ AABB tests/frame at 40 items, with
+   no spatial structure at all. A uniform grid hash cuts it to the handful of
+   boxes actually near you. Rebuilt lazily whenever the collider set changes. */
+const CGRID={ cell:6, map:null, dirty:true };
+WORLD.addCollider = (x1,z1,x2,z2,id)=>{ CGRID.dirty=true;
+  WORLD.colliders.push({x1:Math.min(x1,x2),z1:Math.min(z1,z2),x2:Math.max(x1,x2),z2:Math.max(z1,z2),id}); };
+WORLD.dropCollider = id => { CGRID.dirty=true; WORLD.colliders=WORLD.colliders.filter(c=>c.id!==id); };
+function cgridBuild(){
+  const C=CGRID.cell, m=new Map();
+  /* ⚠️ collision RESOLUTION IS ORDER-DEPENDENT — it mutates x/z mid-loop, so a
+     point overlapping two boxes resolves differently depending on which is
+     tested first. Stamp the array index and sort the gathered set by it, or the
+     grid's cell-walk order silently changes behaviour in those corners.
+     (Measured before this: 2 of 4000 sample points disagreed with brute force.) */
+  WORLD.colliders.forEach((c,i)=>{ c._i=i; });
+  for(const c of WORLD.colliders){
+    const i0=Math.floor(c.x1/C), i1=Math.floor(c.x2/C);
+    const j0=Math.floor(c.z1/C), j1=Math.floor(c.z2/C);
+    for(let i=i0;i<=i1;i++) for(let j=j0;j<=j1;j++){
+      const k=i+","+j; let a=m.get(k); if(!a){ a=[]; m.set(k,a); } a.push(c);
+    }
+  }
+  CGRID.map=m; CGRID.dirty=false;
+}
 WORLD.addStation = s => { WORLD.stations.push(s); return s; };
 
 /* resolve a circle against colliders (returns corrected x,z) */
 WORLD.collide = function(x, z, r){
-  for(const c of WORLD.colliders){
+  if(CGRID.dirty || !CGRID.map) cgridBuild();
+  const C=CGRID.cell;
+  /* gather only the boxes in the cells this circle can touch */
+  const i0=Math.floor((x-r)/C), i1=Math.floor((x+r)/C);
+  const j0=Math.floor((z-r)/C), j1=Math.floor((z+r)/C);
+  const near=[];
+  for(let i=i0;i<=i1;i++) for(let j=j0;j<=j1;j++){
+    const a=CGRID.map.get(i+","+j);
+    if(a) for(const c of a) if(near.indexOf(c)<0) near.push(c);
+  }
+  if(near.length>1) near.sort((a,b)=>a._i-b._i);   // preserve original order
+  for(const c of near){
     const nx = clamp(x, c.x1, c.x2), nz = clamp(z, c.z1, c.z2);
     let dx = x-nx, dz = z-nz;
     let d2 = dx*dx+dz*dz;
@@ -54264,7 +54298,18 @@ WORLD.build = function(){
   scene.fog = new THREE.Fog(0x9db8c8, 55, 150);
 
   const renderer = WORLD.renderer = new THREE.WebGLRenderer({canvas:$("c"), antialias:true});
-  renderer.setPixelRatio(Math.min(devicePixelRatio||1, 2));
+  /* ⚠️ M6 — this allocated full-res HDR MSAA targets at min(dpr,2) with no
+     quality setting at all: on a 4K panel that's a ~265MB colour buffer. The
+     scale is a saved preference now (Pause → 🖥️ Resolution). */
+  WORLD.resScale = (()=>{ try{ return +(localStorage.getItem("homebrew-res")||1); }catch(e){ return 1; } })();
+  WORLD.applyRes = (s)=>{
+    WORLD.resScale = clamp(s, 0.5, 1);
+    try{ localStorage.setItem("homebrew-res", String(WORLD.resScale)); }catch(e){}
+    renderer.setPixelRatio(Math.min(devicePixelRatio||1, 2) * WORLD.resScale);
+    renderer.setSize(innerWidth, innerHeight);
+    if(typeof POST!=="undefined" && POST.ok) POST.checkSize();
+  };
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1, 2) * WORLD.resScale);
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -54400,7 +54445,10 @@ function buildBackdrop(scene){
     const shape=new THREE.Shape();
     shape.moveTo(-w/2,0); pts.forEach(p=>shape.lineTo(p.x,p.y)); shape.lineTo(w/2,0);
     const m=new THREE.Mesh(new THREE.ShapeGeometry(shape),
-      new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:op, fog:false, depthWrite:false}));
+      /* DoubleSide: camYaw is unclamped, so orbiting 180° used to show the
+         BACK of these ridge cards — i.e. an empty fog-coloured void */
+      new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:op, fog:false,
+        depthWrite:false, side:THREE.DoubleSide}));
     m.position.set(0, 2, -dist); m.renderOrder=-10-dist;
     scene.add(m); return m;
   };
@@ -54413,18 +54461,41 @@ function buildBackdrop(scene){
   const sprM=[clayMat(0x3e5e3a), clayMat(0x4a6a40)];
   const blobM=[clayMat(0xb5742e), clayMat(0xc28a2e), clayMat(0x9a4e2a), clayMat(0x6f8f3e)];
   const trunkM=clayMat(0x6a4a30);
+  /* ⚠️ M6 — 90 trees × 2 meshes = 180 draw calls for 3 geometries, and with
+     shadow-map autoUpdate on they all re-rendered every frame. Instanced: 3
+     draws total, per-tree colour via setColorAt. */
+  const TREES={ trunk:[], spruce:[], blob:[] };
   const treeAt=(x,z,kind)=>{
-    const g=new THREE.Group(); const h=WORLD.getH(x,z);
-    const s=rand(0.8,1.5);
-    const trunk=new THREE.Mesh(trunkG, trunkM); trunk.position.y=0.7; trunk.castShadow=true; g.add(trunk);
-    const top=new THREE.Mesh(kind==="s"?spruceG:blobG, kind==="s"?pick(sprM):pick(blobM));
-    top.position.y = kind==="s" ? 3.2 : 3.0; top.castShadow=true; g.add(top);
-    g.position.set(x,h,z); g.scale.set(s,s*rand(0.9,1.2),s);
-    g.rotation.y=rand(Math.PI*2);
-    scene.add(g);
+    const h=WORLD.getH(x,z);
+    const s=rand(0.8,1.5), sy=s*rand(0.9,1.2), ry=rand(Math.PI*2);
+    TREES.trunk.push({x,y:h,z,s,sy,ry, col:trunkM.color});
+    const arr = kind==="s"? TREES.spruce : TREES.blob;
+    arr.push({x, y:h, z, s, sy, ry, top:(kind==="s"?3.2:3.0),
+      col:(kind==="s"?pick(sprM):pick(blobM)).color});
     WORLD.addCollider(x-0.5,z-0.5,x+0.5,z+0.5);
     (WORLD.props.treeSpots=WORLD.props.treeSpots||[]).push({x,z});
-    return g;
+  };
+  const flushTrees=()=>{
+    const M=new THREE.Matrix4(), Q=new THREE.Quaternion(), E=new THREE.Euler(),
+          P=new THREE.Vector3(), S=new THREE.Vector3();
+    const build=(list, geo, mat, yOff)=>{
+      if(!list.length) return;
+      const im=new THREE.InstancedMesh(geo, mat.clone(), list.length);
+      list.forEach((t,i)=>{
+        E.set(0,t.ry,0); Q.setFromEuler(E);
+        P.set(t.x, t.y + (yOff||0)*t.sy, t.z);
+        S.set(t.s, t.sy, t.s);
+        M.compose(P,Q,S); im.setMatrixAt(i,M);
+        im.setColorAt(i, t.col);
+      });
+      im.instanceMatrix.needsUpdate=true;
+      if(im.instanceColor) im.instanceColor.needsUpdate=true;
+      im.castShadow=true; im.receiveShadow=true;
+      scene.add(im);
+    };
+    build(TREES.trunk,  trunkG,  trunkM,  0.7);
+    build(TREES.spruce, spruceG, sprM[0], 3.2);
+    build(TREES.blob,   blobG,   blobM[0], 3.0);
   };
   // scatter around the lot edges & mountain — keep lot + road + trail + crick clear
   const clear=(x,z)=> (x>-25 && x<27 && z>-16 && z<23) || (z>22 && z<32) ||
@@ -54442,6 +54513,7 @@ function buildBackdrop(scene){
     if(clear(x,z)) continue;
     treeAt(x,z, (z<-20||Math.random()<0.45)?"s":"b"); placed++;
   }
+  flushTrees();
 }
 
 /* ---- plank material helper ---- */
@@ -55317,6 +55389,12 @@ ITEMS.update = function(dt){
   const P = MAIN.player;
   for(const it of ITEMS.list){
     if(it.dead) continue;
+    /* ⚠️ M6 — forklift cargo is never given `carriedBy`, so this skip missed it
+       and ITEMS (which runs AFTER FORK) applied full gravity on top of FORK's
+       positioning. `vy` grew at 22/s, so after ~5s the crate hung ~8 units
+       below the forks and rocketed on release — and it was eligible for the
+       crick-drift kill branch while airborne. FORK owns its cargo entirely. */
+    if(it===FORK.cargo){ it.vx=it.vy=it.vz=0; continue; }
     if(it.carriedBy){
       const rig=it.carriedBy;
       const heavy=it.mass==="heavy"?1: it.mass==="mid"?0.4:0;
@@ -58099,11 +58177,19 @@ UI.pause = function(){
       <span class="btn clickable" id="pz-go">▶ Back to it</span>
       <span class="btn clickable" id="pz-how">❓ How to play</span>
       <span class="btn clickable" id="pz-mute">${SFX.muted?"🔊 Unmute":"🔇 Mute"}</span>
+      <span class="btn clickable" id="pz-res">🖥️ Resolution: ${Math.round((WORLD.resScale||1)*100)}%</span>
       <span class="btn red clickable" id="pz-quit">💾 Save & quit to title</span>
-    </div>`);
+    </div>
+    <p class="sub" style="text-align:center;margin-top:10px">Drop the resolution if the mountain runs rough.</p>`);
   o.querySelector("#pz-go").onclick=()=>UI.close();
   o.querySelector("#pz-how").onclick=()=>UI.howto(false);
   o.querySelector("#pz-mute").onclick=()=>{ SFX.toggleMute(); UI.pause(); };
+  o.querySelector("#pz-res").onclick=()=>{
+    const steps=[1,0.85,0.7,0.5];
+    const i=steps.indexOf(WORLD.resScale);
+    WORLD.applyRes(steps[(i<0?0:i+1)%steps.length]);
+    UI.pause();
+  };
   o.querySelector("#pz-quit").onclick=()=>{ CYCLE.save(); location.reload(); };
 };
 
@@ -58333,13 +58419,22 @@ MAIN.titleCam = function(dt){
    sub-ticks so EVERYTHING (customers, ferments, truck, weather) fast-forwards
    together — same trick as MB.step, no system ever sees a big dt */
 MAIN.timeScale = 1;
+/* ⚠️ M6 — `dt` is clamped at 0.05 inside tick(), so ANY machine running under
+   20fps played the whole game in slow motion, and a backgrounded tab (whose
+   setInterval throttles to ~1/sec) advanced 0.05s per real second. Catch up
+   with real sub-steps instead of silently losing time — capped so a long
+   alt-tab can't stall the frame trying to simulate ten minutes at once. */
 MAIN.drive = function(dt){
   const n = Math.max(1, Math.round(MAIN.timeScale));
   if(n > 1){
     const sub = Math.min(dt, 0.05);
     for(let i = 1; i < n; i++) MAIN.tick(sub, true);
+    MAIN.tick(dt);
+    return;
   }
-  MAIN.tick(dt);
+  let left = Math.min(dt, 1.0);            // never chase more than a second
+  while(left > 0.051){ MAIN.tick(0.05, true); left -= 0.05; }
+  MAIN.tick(left);
 };
 MAIN.tick = function(dt, skipRender){
   dt=Math.min(dt,0.05);
@@ -60335,23 +60430,38 @@ ALIVE.buildBeerVfx = function(){
   WORLD.scene.add(stream);
   ALIVE.stream=stream;
 };
+/* ⚠️ M6 — these used to allocate `new MeshStandardMaterial` PER BUBBLE and PER
+   BURP and never dispose them (there were ZERO .dispose() calls in the whole
+   codebase). At ~10 drinkers that's ~12k orphaned materials an hour, each its
+   own draw call while alive. Now both are fixed-size POOLS: meshes and
+   materials are built once and reused, so the count is bounded forever. */
+ALIVE._pool = function(store, cap, geoKey, geoMake, matOpts){
+  if(store.pool) return store.pool;
+  store.pool=[];
+  for(let i=0;i<cap;i++){
+    const m=new THREE.Mesh(geoGet(geoKey, geoMake), new THREE.MeshStandardMaterial(matOpts));
+    m.visible=false; WORLD.scene.add(m);
+    store.pool.push(m);
+  }
+  return store.pool;
+};
+ALIVE._bubStore={}; ALIVE._burpStore={};
 ALIVE.bubble = function(x,y,z,kind){          // kind: hic | mug
-  if(ALIVE.bubbles.length>16) return;
-  const m=new THREE.Mesh(geoGet("hicbub",()=>new THREE.SphereGeometry(0.09,7,6)),
-    new THREE.MeshStandardMaterial({color:0xcfe8f0, transparent:true, opacity:0.5, roughness:0.1}));
+  const pool=ALIVE._pool(ALIVE._bubStore, 18, "hicbub", ()=>new THREE.SphereGeometry(0.09,7,6),
+    {color:0xcfe8f0, transparent:true, opacity:0.5, roughness:0.1});
+  const m=pool.find(p=>!p.visible); if(!m) return;
+  m.visible=true; m.material.opacity=0.5;
   m.position.set(x,y,z);
-  const s=kind==="mug"?0.5:rand(0.8,1.3);
-  m.scale.setScalar(s);
-  WORLD.scene.add(m);
+  m.scale.setScalar(kind==="mug"?0.5:rand(0.8,1.3));
   ALIVE.bubbles.push({m, t:0, life:rand(0.8,1.5), vy:rand(0.9,1.4), ph:rand(10)});
 };
 ALIVE.burp = function(x,y,z,big){
-  if(ALIVE.burps.length>8) return;
-  const m=new THREE.Mesh(geoGet("burpcld",()=>new THREE.SphereGeometry(0.14,8,6)),
-    new THREE.MeshStandardMaterial({color:0x8fb85a, transparent:true, opacity:0.5, roughness:0.9}));
+  const pool=ALIVE._pool(ALIVE._burpStore, 10, "burpcld", ()=>new THREE.SphereGeometry(0.14,8,6),
+    {color:0x8fb85a, transparent:true, opacity:0.5, roughness:0.9});
+  const m=pool.find(p=>!p.visible); if(!m) return;
+  m.visible=true; m.material.opacity=0.5;
   m.position.set(x,y,z);
   m.scale.setScalar(big?1.15:0.85);
-  WORLD.scene.add(m);
   ALIVE.burps.push({m, t:0, life:big?1.5:1.1, vy:0.8, big});
 };
 
@@ -60606,7 +60716,7 @@ ALIVE.update = function(dt){
     b.m.position.x+=Math.sin(CLAY.raw*5+b.ph)*dt*0.25;
     if(b.t>=b.life){
       puff(b.m.position.x,b.m.position.y,b.m.position.z,0xcfe8f0,0.1,0.3,0.35);
-      WORLD.scene.remove(b.m);
+      b.m.visible=false;                       // back to the pool
       ALIVE.bubbles.splice(i,1);
     }
   }
@@ -60621,7 +60731,7 @@ ALIVE.update = function(dt){
     if(b.t>=b.life){
       for(let p=0;p<4;p++) puff(b.m.position.x+rand(-.2,.2),b.m.position.y,b.m.position.z+rand(-.2,.2),0xa8c26a,0.14,0.6,0.5);
       SFX.play("plop",b.m.position.x,b.m.position.z);
-      WORLD.scene.remove(b.m);
+      b.m.visible=false;                       // back to the pool
       ALIVE.burps.splice(i,1);
     }
   }

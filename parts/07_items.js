@@ -138,6 +138,12 @@ ITEMS.update = function(dt){
   const P = MAIN.player;
   for(const it of ITEMS.list){
     if(it.dead) continue;
+    /* ⚠️ M6 — forklift cargo is never given `carriedBy`, so this skip missed it
+       and ITEMS (which runs AFTER FORK) applied full gravity on top of FORK's
+       positioning. `vy` grew at 22/s, so after ~5s the crate hung ~8 units
+       below the forks and rocketed on release — and it was eligible for the
+       crick-drift kill branch while airborne. FORK owns its cargo entirely. */
+    if(it===FORK.cargo){ it.vx=it.vy=it.vz=0; continue; }
     if(it.carriedBy){
       const rig=it.carriedBy;
       const heavy=it.mass==="heavy"?1: it.mass==="mid"?0.4:0;

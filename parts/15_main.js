@@ -222,13 +222,22 @@ MAIN.titleCam = function(dt){
    sub-ticks so EVERYTHING (customers, ferments, truck, weather) fast-forwards
    together — same trick as MB.step, no system ever sees a big dt */
 MAIN.timeScale = 1;
+/* ⚠️ M6 — `dt` is clamped at 0.05 inside tick(), so ANY machine running under
+   20fps played the whole game in slow motion, and a backgrounded tab (whose
+   setInterval throttles to ~1/sec) advanced 0.05s per real second. Catch up
+   with real sub-steps instead of silently losing time — capped so a long
+   alt-tab can't stall the frame trying to simulate ten minutes at once. */
 MAIN.drive = function(dt){
   const n = Math.max(1, Math.round(MAIN.timeScale));
   if(n > 1){
     const sub = Math.min(dt, 0.05);
     for(let i = 1; i < n; i++) MAIN.tick(sub, true);
+    MAIN.tick(dt);
+    return;
   }
-  MAIN.tick(dt);
+  let left = Math.min(dt, 1.0);            // never chase more than a second
+  while(left > 0.051){ MAIN.tick(0.05, true); left -= 0.05; }
+  MAIN.tick(left);
 };
 MAIN.tick = function(dt, skipRender){
   dt=Math.min(dt,0.05);

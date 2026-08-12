@@ -244,23 +244,38 @@ ALIVE.buildBeerVfx = function(){
   WORLD.scene.add(stream);
   ALIVE.stream=stream;
 };
+/* ⚠️ M6 — these used to allocate `new MeshStandardMaterial` PER BUBBLE and PER
+   BURP and never dispose them (there were ZERO .dispose() calls in the whole
+   codebase). At ~10 drinkers that's ~12k orphaned materials an hour, each its
+   own draw call while alive. Now both are fixed-size POOLS: meshes and
+   materials are built once and reused, so the count is bounded forever. */
+ALIVE._pool = function(store, cap, geoKey, geoMake, matOpts){
+  if(store.pool) return store.pool;
+  store.pool=[];
+  for(let i=0;i<cap;i++){
+    const m=new THREE.Mesh(geoGet(geoKey, geoMake), new THREE.MeshStandardMaterial(matOpts));
+    m.visible=false; WORLD.scene.add(m);
+    store.pool.push(m);
+  }
+  return store.pool;
+};
+ALIVE._bubStore={}; ALIVE._burpStore={};
 ALIVE.bubble = function(x,y,z,kind){          // kind: hic | mug
-  if(ALIVE.bubbles.length>16) return;
-  const m=new THREE.Mesh(geoGet("hicbub",()=>new THREE.SphereGeometry(0.09,7,6)),
-    new THREE.MeshStandardMaterial({color:0xcfe8f0, transparent:true, opacity:0.5, roughness:0.1}));
+  const pool=ALIVE._pool(ALIVE._bubStore, 18, "hicbub", ()=>new THREE.SphereGeometry(0.09,7,6),
+    {color:0xcfe8f0, transparent:true, opacity:0.5, roughness:0.1});
+  const m=pool.find(p=>!p.visible); if(!m) return;
+  m.visible=true; m.material.opacity=0.5;
   m.position.set(x,y,z);
-  const s=kind==="mug"?0.5:rand(0.8,1.3);
-  m.scale.setScalar(s);
-  WORLD.scene.add(m);
+  m.scale.setScalar(kind==="mug"?0.5:rand(0.8,1.3));
   ALIVE.bubbles.push({m, t:0, life:rand(0.8,1.5), vy:rand(0.9,1.4), ph:rand(10)});
 };
 ALIVE.burp = function(x,y,z,big){
-  if(ALIVE.burps.length>8) return;
-  const m=new THREE.Mesh(geoGet("burpcld",()=>new THREE.SphereGeometry(0.14,8,6)),
-    new THREE.MeshStandardMaterial({color:0x8fb85a, transparent:true, opacity:0.5, roughness:0.9}));
+  const pool=ALIVE._pool(ALIVE._burpStore, 10, "burpcld", ()=>new THREE.SphereGeometry(0.14,8,6),
+    {color:0x8fb85a, transparent:true, opacity:0.5, roughness:0.9});
+  const m=pool.find(p=>!p.visible); if(!m) return;
+  m.visible=true; m.material.opacity=0.5;
   m.position.set(x,y,z);
   m.scale.setScalar(big?1.15:0.85);
-  WORLD.scene.add(m);
   ALIVE.burps.push({m, t:0, life:big?1.5:1.1, vy:0.8, big});
 };
 
@@ -515,7 +530,7 @@ ALIVE.update = function(dt){
     b.m.position.x+=Math.sin(CLAY.raw*5+b.ph)*dt*0.25;
     if(b.t>=b.life){
       puff(b.m.position.x,b.m.position.y,b.m.position.z,0xcfe8f0,0.1,0.3,0.35);
-      WORLD.scene.remove(b.m);
+      b.m.visible=false;                       // back to the pool
       ALIVE.bubbles.splice(i,1);
     }
   }
@@ -530,7 +545,7 @@ ALIVE.update = function(dt){
     if(b.t>=b.life){
       for(let p=0;p<4;p++) puff(b.m.position.x+rand(-.2,.2),b.m.position.y,b.m.position.z+rand(-.2,.2),0xa8c26a,0.14,0.6,0.5);
       SFX.play("plop",b.m.position.x,b.m.position.z);
-      WORLD.scene.remove(b.m);
+      b.m.visible=false;                       // back to the pool
       ALIVE.burps.splice(i,1);
     }
   }

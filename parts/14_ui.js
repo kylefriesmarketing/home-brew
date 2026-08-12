@@ -530,10 +530,18 @@ UI.pause = function(){
       <span class="btn clickable" id="pz-go">▶ Back to it</span>
       <span class="btn clickable" id="pz-how">❓ How to play</span>
       <span class="btn clickable" id="pz-mute">${SFX.muted?"🔊 Unmute":"🔇 Mute"}</span>
+      <span class="btn clickable" id="pz-res">🖥️ Resolution: ${Math.round((WORLD.resScale||1)*100)}%</span>
       <span class="btn red clickable" id="pz-quit">💾 Save & quit to title</span>
-    </div>`);
+    </div>
+    <p class="sub" style="text-align:center;margin-top:10px">Drop the resolution if the mountain runs rough.</p>`);
   o.querySelector("#pz-go").onclick=()=>UI.close();
   o.querySelector("#pz-how").onclick=()=>UI.howto(false);
   o.querySelector("#pz-mute").onclick=()=>{ SFX.toggleMute(); UI.pause(); };
+  o.querySelector("#pz-res").onclick=()=>{
+    const steps=[1,0.85,0.7,0.5];
+    const i=steps.indexOf(WORLD.resScale);
+    WORLD.applyRes(steps[(i<0?0:i+1)%steps.length]);
+    UI.pause();
+  };
   o.querySelector("#pz-quit").onclick=()=>{ CYCLE.save(); location.reload(); };
 };

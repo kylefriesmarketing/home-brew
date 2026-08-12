@@ -1,9 +1,60 @@
-# HOME BREW — dev notes (v1.9, content-complete campaign)
+# HOME BREW — dev notes (v2.0 — all six milestones complete)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v2.0 — **MILESTONE 6 of 6: HARDENING** ✅ — *the plan is complete*
+
+Every fix verified by measurement, not assumption.
+
+- 🚜 **Forklift cargo ran full gravity.** `FORK.cargo` is never given
+  `carriedBy`, so `ITEMS.update`'s skip missed it — and ITEMS runs *after* FORK,
+  so it won. `vy` grew at 22/s: after ~5s the crate hung ~8 units under the
+  forks and rocketed on release, and was eligible for the crick-drift kill
+  branch while airborne. FORK owns its cargo outright now. Measured: crate holds
+  at the fork tip, `vy` 0.
+- 🌲 **90 trees × 2 meshes = 180 draw calls → 3 instanced.** Per-tree colour via
+  `setColorAt`. Scene now runs **8 InstancedMeshes** total.
+- 🫧 **The material leak is gone.** Bubbles and burps allocated a
+  `new MeshStandardMaterial` *each*, never disposed — **there were zero
+  `.dispose()` calls in the entire codebase** — ~12k orphaned materials an hour
+  at 10 drinkers. Both are fixed-size pools now. Measured: **3,000 spawns of
+  each, zero growth** (18 bubbles / 10 burps / 90 puffs, all capped).
+- 🧱 **Collision was O(n) with no spatial structure** — ~135 AABBs tested for
+  the player *and every loose item, every frame* (5,400+ tests/frame at 40
+  items). Uniform grid hash: **20k calls 26.4ms → 5.4ms (4.9×)**.
+  ⚠️ **Collision resolution is ORDER-DEPENDENT** (it mutates x/z mid-loop), so
+  the grid's cell-walk order silently changed behaviour in corners where a point
+  overlaps two boxes — 2 of 4000 sample points disagreed with brute force. Fixed
+  by stamping the array index and sorting the gathered set by it.
+  **Now 8000/8000 exact, maxDelta 0.**
+- 🏔️ **The backdrop was one-sided.** Three ridge cards at −Z with default
+  `FrontSide` and an unclamped `camYaw` — orbit 180° and you were looking into
+  an empty fog-coloured void. DoubleSide.
+- 🐌 **Slow machines ran the game in slow motion.** `dt` clamps at 0.05 inside
+  `tick()`, so anything under 20fps lost time silently, and a backgrounded tab
+  (setInterval throttled to ~1/sec) advanced **0.05s per real second**.
+  `MAIN.drive` now catches up with real sub-steps, capped at 1s so a long
+  alt-tab can't stall the frame. Measured: a 0.5s frame advances 0.5s of sim.
+- 🖥️ **Resolution option** (Pause → 🖥️, cycles 100/85/70/50%, saved). It was
+  allocating full-res HDR MSAA targets at `min(dpr,2)` with no quality setting —
+  a ~265MB colour buffer on a 4K panel.
+
+### The six milestones
+| | Milestone | Shipped |
+|---|---|---|
+| M1 | Finish the Look | v1.5 |
+| M2 | The Equation | v1.6 |
+| M3 | Appetites & Demand | v1.7 |
+| M4 | Tension & the Late Game | v1.8 |
+| M5 | Presence & the Mountain | v1.9 |
+| M6 | Hardening | **v2.0** |
+
+Final state: 11 beer styles · 16 Legendaries · 8 customer archetypes · 18 forage
+patches · 18 machines · 16 brag plaques · 4 seasons · 10 contextual tips.
+~5ms/frame with everything installed and running. Zero console errors.
 
 ## New in v1.9 — **MILESTONE 5 of 6: PRESENCE & THE MOUNTAIN** ✅ (`24_wild.js`)
 
