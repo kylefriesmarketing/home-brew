@@ -154,7 +154,7 @@ kbd{background:#3a3128;color:#ffd98a;border-radius:4px;border:1px solid #6b4a2f;
     <div class="credit">a Dirty Boy Devs joint · The Room</div>
   </div>
   <div class="bigfade" id="fade"></div>
-  <div id="verchip">home brew v1.6</div>
+  <div id="verchip">home brew v1.7</div>
 </div>
 <script>
 (function(){
@@ -53371,14 +53371,70 @@ DATA.HATS = {
 };
 
 /* ---- customers ---- */
+/* M3: `likes`/`dislikes` are STYLE keys — now that ratio decides the style, the
+   pub can have opinions. `req` is how often this archetype arrives with a
+   demand. Locals are the honest-beer crowd; tourists chase novelty; the Hop
+   Snob is unbearable on purpose. */
 DATA.CUSTOMERS = {
-  local:  { name:"Local",  wallet:9,  sense:1.2, tipMul:0.8, fameMul:1.4, col:0x7a6a4c, chat:["evenin'","the usual, if it's drinkable","how's the roof holdin' up?"] },
-  tourist:{ name:"Tourist",wallet:22, sense:0.6, tipMul:1.6, fameMul:1.0, col:0xe86a5a, chat:["is this CRAFT?","we drove nine hours!","do y'all have wifi?"] },
-  hiker:  { name:"Hiker",  wallet:12, sense:0.3, tipMul:1.0, fameMul:0.7, col:0x5a8a5a, chat:["water first. then beer.","I smelled this place from the ridge","carbs are carbs"] },
-  joe:    { name:"Hollow Joe", wallet:99, sense:0, tipMul:3.0, fameMul:1.0, col:0x6a6a7a, special:true },
-  bob:    { name:"Barleycorn Bob", wallet:30, sense:0.8, tipMul:1.0, fameMul:0, col:0xd8c8a0, special:true, chat:["*scribbles*","don't mind me. reviewing.","mm. yes. words."] },
-  cope:   { name:"Copperhead", wallet:45, sense:1.0, tipMul:2.2, fameMul:1.2, col:0x5e4a3a, special:true, chat:["...place ain't terrible","don't tell NOBODY I'm here","still say it's yard soup. good yard soup."] },
+  local:  { name:"Local",  wallet:9,  sense:1.2, tipMul:0.8, fameMul:1.4, col:0x7a6a4c, req:0.30,
+            likes:["lager","amber","porter"], dislikes:["curio","gose"],
+            chat:["evenin'","the usual, if it's drinkable","how's the roof holdin' up?"] },
+  tourist:{ name:"Tourist",wallet:22, sense:0.6, tipMul:1.6, fameMul:1.0, col:0xe86a5a, req:0.55,
+            likes:["fruit","sour","honey","curio"], dislikes:["lager"],
+            chat:["is this CRAFT?","we drove nine hours!","do y'all have wifi?"] },
+  hiker:  { name:"Hiker",  wallet:12, sense:0.3, tipMul:1.0, fameMul:0.7, col:0x5a8a5a, req:0.15,
+            likes:["stout","porter","honey"], dislikes:[],
+            chat:["water first. then beer.","I smelled this place from the ridge","carbs are carbs"] },
+  snob:   { name:"Hop Snob",wallet:26,sense:0.7, tipMul:1.3, fameMul:1.6, col:0x6a5a8a, req:0.85,
+            likes:["ipa","stout","saison"], dislikes:["lager","honey","fruit"],
+            chat:["what's your hop bill?","I only drink unfiltered","is this… pasteurised?"] },
+  student:{ name:"Student", wallet:7, sense:1.5, tipMul:0.5, fameMul:0.9, col:0xe8c23d, req:0.05,
+            likes:["lager","amber","fruit"], dislikes:[],
+            chat:["cheapest thing you got","is there a student discount","I have four dollars"] },
+  joe:    { name:"Hollow Joe", wallet:99, sense:0, tipMul:3.0, fameMul:1.0, col:0x6a6a7a, special:true,
+            req:0, likes:["curio","gose","sour"], dislikes:[] },
+  bob:    { name:"Barleycorn Bob", wallet:30, sense:0.8, tipMul:1.0, fameMul:0, col:0xd8c8a0, special:true,
+            req:0, likes:[], dislikes:[], purist:true,   // Bob scores the RATIO, not the style
+            chat:["*scribbles*","don't mind me. reviewing.","mm. yes. words."] },
+  cope:   { name:"Copperhead", wallet:45, sense:1.0, tipMul:2.2, fameMul:1.2, col:0x5e4a3a, special:true,
+            req:0, likes:["stout","ipa","porter"], dislikes:["fruit"],
+            chat:["...place ain't terrible","don't tell NOBODY I'm here","still say it's yard soup. good yard soup."] },
 };
+
+/* ============================================================================
+   REQUESTS — Potion Craft's red/green conditions, the cheapest way to make all
+   four axes pay. RED is required (they walk without it); GREEN is optional and
+   pays a premium. With a pool this size no single recipe satisfies the room,
+   which is what finally kills monoculture at the demand end.
+   `test(beer)` reads the style/axes the M2 restructure now provides.
+   ============================================================================ */
+DATA.REQUESTS = {
+  red: [
+    { key:"bitter",  txt:"somethin' BITTER",        test:b=>b.axes.b>=b.axes.s },
+    { key:"sweet",   txt:"somethin' SWEET",         test:b=>b.axes.s>b.axes.b },
+    { key:"nofunk",  txt:"nothin' funky",           test:b=>b.axes.f<=1 },
+    { key:"noweird", txt:"nothin' WEIRD",           test:b=>b.axes.w<=0 },
+    { key:"dark",    txt:"a dark one",              test:b=>["stout","porter","ipa"].includes(b.style) },
+    { key:"easy",    txt:"somethin' easy-drinkin'", test:b=>["lager","amber","honey","fruit"].includes(b.style) },
+    { key:"decent",  txt:"anythin' that ain't swill", test:b=>b.tier!=="swill" },
+  ],
+  green: [
+    { key:"funky",   txt:"bonus if it's got FUNK",   pay:0.40, test:b=>b.axes.f>=2 },
+    { key:"weird",   txt:"bonus if it's WEIRD",      pay:0.55, test:b=>b.axes.w>=2 },
+    { key:"clean",   txt:"bonus for a clean pour",   pay:0.35, test:b=>(b.purity||0)>=0.95 },
+    { key:"strong",  txt:"bonus if it's a big'un",   pay:0.35, test:b=>(b.total||0)>=9 },
+    { key:"legend",  txt:"bonus for somethin' famous",pay:0.75, test:b=>!!b.legendary },
+  ],
+};
+
+/* Moonlighter's popularity curve: pour the same style every night and it sags
+   on its own. Monoculture punishes itself — no balance patch required. */
+/* ⚠️ decayPerDay was 0.34 — which fully cleared a night's fatigue by morning,
+   so monoculture never actually compounded. At 0.12 a second night on the same
+   style starts already sagging, which is the pressure to rotate. */
+DATA.POP = { perPint:0.085, decayPerDay:0.12, floor:0.75, ceil:1.25 };
+/* Recettear: reputation tracked PER CUSTOMER CLASS, not per individual. */
+DATA.REP = { perGoodPint:0.09, perBadPint:-0.14, max:5, budgetPerLevel:0.10 };
 
 /* ---- Bob's press column (reviews are wrong in funny ways, even the raves) ---- */
 DATA.BOB_PRESS = {
@@ -55073,6 +55129,8 @@ const CUSTOMER_LOOKS = {
   joe:    ()=>({skin:0xcabd9e, shirt:0x5a5a6a, pants:0x4a4a52, hat:"hood", accessory:"lantern"}),
   bob:    ()=>({skin:0xe8b48c, shirt:0xc9bd9a, pants:0x6a5a48, hat:"bucket", accessory:"camera"}),
   cope:   ()=>({skin:0xc98c5a, shirt:0x5e4a3a, pants:0x3a3a32, hat:"straw", belly:true}),
+  snob:   ()=>({skin:pick([0xf0c8a0,0xc98c5a]), shirt:pick([0x6a5a8a,0x3a4a5a]), pants:0x2a2a32, hat:pick(["beanie",null]), accessory:"pack"}),
+  student:()=>({skin:pick([0xe8b48c,0x8a5a3a,0xf0c8a0]), shirt:pick([0xe8c23d,0x5a8ae8,0xc94c6a]), pants:0x4a4a6a, hat:pick(["trucker",null,null])}),
 };
 function makeCustomer(type){
   const look=CUSTOMER_LOOKS[type]();
@@ -56181,15 +56239,23 @@ PUB.kickKeg = function(i){
 /* customer lifecycle */
 PUB.spawnCustomer = function(type){
   if(!type){
+    /* five regular archetypes now; the Snob shows up as you get famous */
+    const fame=G_STATE? G_STATE.fame : 0;
     const r=Math.random();
-    type = r<0.5?"local": r<0.8?"tourist":"hiker";
+    const snobChance=clamp(fame/450, 0, 0.16);
+    type = r<0.34?"local" : r<0.58?"tourist" : r<0.74?"hiker"
+         : r<0.74+snobChance?"snob" : "student";
   }
   const rig=makeCustomer(type);
   rig.setPos(11.5+rand(-1,1), 28);
   WORLD.scene.add(rig.group);
   const c={
     rig, type, def:DATA.CUSTOMERS[type], state:"toDoor", t:0, seed:rand(10),
-    chosen:-1, drunk:0, pints:0, patience:26, mug:null, spot:null, wallet:DATA.CUSTOMERS[type].wallet*(0.8+rand(0.4)),
+    chosen:-1, drunk:0, pints:0, patience:26, mug:null, spot:null,
+    /* reputation with this CLASS raises what they'll spend (Recettear) */
+    wallet:DATA.CUSTOMERS[type].wallet*(0.8+rand(0.4))
+      *((typeof TASTE!=="undefined")?TASTE.walletMul(type):1),
+    req:(typeof TASTE!=="undefined")?TASTE.rollRequest(type):null,
   };
   PUB.customers.push(c);
   if(Math.random()<0.5 && c.def.chat) setTimeout(()=>{ if(!c.dead) UI.bubbleRig(rig, pick(c.def.chat), 2400); }, rand(1000,4000));
@@ -56198,7 +56264,11 @@ PUB.spawnCustomer = function(type){
 
 /* the ONE appetite formula — the sim and the price tag both read it, so the
    readout can never drift from what customers actually do */
-PUB.appeal = function(beer, price, type){
+/* M3: the ONE appetite formula now also carries taste — style preference,
+   popularity fatigue and the customer's standing request. `cust` is optional:
+   the price tag asks the ARCHETYPE-level question (no specific request), the
+   sim passes the actual customer. */
+PUB.appeal = function(beer, price, type, cust){
   if(type==="joe"){
     const cursedIng=beer.ing.some(t=>DATA.INGREDIENTS[t].cursed);
     return (beer.axes.w>=2||cursedIng||beer.legendary) ? 10 : -1;
@@ -56206,12 +56276,18 @@ PUB.appeal = function(beer, price, type){
   const def=DATA.CUSTOMERS[type]||DATA.CUSTOMERS.local;
   let v = beer.score*1.35 - price*def.sense;
   if(beer.legendary) v+=2.2;
+  if(typeof TASTE!=="undefined"){
+    v += TASTE.styleMod(beer, type);                 // they like it / they don't
+    v *= TASTE.pop(beer.style);                      // poured it all week? it sags
+    /* a RED condition is a hard gate — they walk rather than settle */
+    if(cust && cust.req && !TASTE.meetsRed(beer, cust.req)) return -99;
+  }
   return v;
 };
 /* would a typical one buy? (the +0.15 is the mean of the rand spread below) */
 PUB.willBuy = function(beer, price, type){
   const def=DATA.CUSTOMERS[type]||DATA.CUSTOMERS.local;
-  if(price>def.wallet) return false;
+  if(price>def.wallet*((typeof TASTE!=="undefined")?TASTE.walletMul(type):1)) return false;
   return PUB.appeal(beer,price,type)+0.15 > 0.2;
 };
 
@@ -56221,7 +56297,7 @@ PUB.chooseTap = function(c){
     const T=G_STATE.taps[i];
     if(!T.beer||T.pints<=0) continue;
     if(T.price>c.wallet) continue;
-    const v = PUB.appeal(T.beer, T.price, c.type) + (c.type==="joe"?0:rand(-0.5,0.8));
+    const v = PUB.appeal(T.beer, T.price, c.type, c) + (c.type==="joe"?0:rand(-0.5,0.8));
     if(v>bv){ bv=v; best=i; }
   }
   return best;
@@ -56234,8 +56310,12 @@ PUB.serve = function(c){
   PUB.lastPourTap=c.chosen;
   SFX.play("pour",c.rig.x,c.rig.z);
   T.pints--;
-  const paid = c.type==="joe"? T.price*3 : T.price;
+  /* GREEN condition pays a premium on top */
+  const green=(typeof TASTE!=="undefined")?TASTE.greenPay(T.beer, c.req):0;
+  const paid = (c.type==="joe"? T.price*3 : T.price) * (1+green);
+  c.greenHit=green>0;
   ECON.earn(paid, "beer");
+  if(typeof TASTE!=="undefined") TASTE.notePour(T.beer);
   SFX.play("chaching",16.8,-5.9);
   c.wallet-=T.price;
   c.beer=T.beer; c.paidPrice=T.price; c.state="toSpot"; c.pints++;
@@ -56274,6 +56354,19 @@ PUB.finishDrink = function(c){
   const beer=c.beer, r=c.rig;
   if(c.mug){ c.rig.parts.armR.remove(c.mug); c.mug=null; }
   const fm=c.def.fameMul;
+  /* M3: reputation with this CLASS moves on every pint — good beer for the
+     people who wanted it raises what the whole class will spend next time */
+  if(typeof TASTE!=="undefined"){
+    const liked=TASTE.styleMod(beer,c.type)>0;
+    const bad=beer.tier==="swill";
+    TASTE.noteRep(c.type, bad? DATA.REP.perBadPint
+      : (liked? DATA.REP.perGoodPint*1.6 : DATA.REP.perGoodPint));
+    if(c.greenHit){
+      SFX.play("chaching",r.x,r.z);
+      UI.bubbleRig(r, pick(["EXACTLY what I wanted","you READ my mind","that's the one"]), 2200);
+      STORY.fame(1.5*fm,"request met");
+    }
+  }
   /* the pairing payoff */
   if(c.dish){
     if(c.dishPaired && beer.tier!=="swill"){
@@ -56380,9 +56473,16 @@ PUB.update = function(dt){
           c.state="order"; c.patience=26;
           if(c.type==="joe" && Math.random()<0.8)
             setTimeout(()=>{ if(!c.dead) UI.bubbleRig(c.rig, `<span class="who">Hollow Joe</span>“${STORY.joeHint()}”`, 6500); }, 900);
+          /* say what you came in for — a request nobody can SEE is just a
+             silent refusal, which reads as the game being broken */
+          if(c.req && typeof TASTE!=="undefined")
+            setTimeout(()=>{ if(!c.dead) UI.bubbleRig(c.rig, "“"+TASTE.requestText(c.req)+"”", 4200); }, 500);
           c.chosen=PUB.chooseTap(c);
           if(c.chosen<0){
-            UI.bubbleRig(r, pick(c.type==="joe"?["nothing WRONG on tap. shame."]:["nothin' on tap??","too rich for my blood","I'll come back"]), 2200);
+            const gated = c.req && G_STATE.taps.some(T=>T.beer&&T.pints>0&&!TASTE.meetsRed(T.beer,c.req));
+            UI.bubbleRig(r, pick(c.type==="joe"?["nothing WRONG on tap. shame."]
+              : gated?["that ain't what I asked for","not what I came for","…nope"]
+              :["nothin' on tap??","too rich for my blood","I'll come back"]), 2200);
             c.state="leave"; STORY.fame(-0.5,"no sale");
           }
         }
@@ -56495,6 +56595,7 @@ ECON.freshState = function(){
     spentGrain:0, bearStage:0,
     weather:"clear", power:true, leafDay:false, cleanNights:0,
     puddles:[], brags:{},
+    pop:{}, rep:{},                   // M3: style fatigue + per-archetype reputation
   };
 };
 ECON.newState = function(){
@@ -57525,14 +57626,21 @@ UI.priceDialog = function(i){
       T.price<=T.beer.suggest*1.15? "fair mountain price" :
       T.price<=T.beer.suggest*1.8? "tourist pricing 👀" : "highway robbery (they WILL notice)";
     /* who'll actually drink it — read straight off the sim's own appetite math */
-    const who=[["local","🧢 Locals"],["tourist","📷 Tourists"],["hiker","🥾 Hikers"]].map(([k,label])=>{
+    const who=[["local","🧢 Locals"],["tourist","📷 Tourists"],["hiker","🥾 Hikers"],
+               ["snob","🎩 Snobs"],["student","🎒 Students"]].map(([k,label])=>{
       const yes=PUB.willBuy(T.beer, T.price, k);
-      return `<span style="opacity:${yes?1:0.38}">${yes?"✅":"❌"} ${label}</span>`;
+      const d=DATA.CUSTOMERS[k];
+      const loves=d.likes && d.likes.includes(T.beer.style);
+      const hates=d.dislikes && d.dislikes.includes(T.beer.style);
+      return `<span style="opacity:${yes?1:0.38}">${yes?"✅":"❌"} ${label}${loves?"♥":hates?"✗":""}</span>`;
     }).join(" &nbsp; ");
     const locals=PUB.willBuy(T.beer,T.price,"local");
-    const note = locals
+    /* M3: pouring one style all week makes it sag — show that here */
+    const fatigue=(typeof TASTE!=="undefined")?TASTE.pop(T.beer.style):1;
+    const tired = fatigue<0.93 ? `<br><span style="color:#e58873">The room's tired of ${T.beer.styleName||"this"} (${Math.round(fatigue*100)}% appeal) — pour somethin' else.</span>` : "";
+    const note = (locals
       ? "Locals drink here — they tip small but they <b>talk</b> (fame ×1.4)."
-      : "Priced for passers-through. Tourists pay it; the regulars walk.";
+      : "Priced for passers-through. Tourists pay it; the regulars walk.") + tired;
     return `<h1>🏷️ “${T.beer.name}”</h1>
       <div class="sub">${T.beer.tierName} · suggested $${T.beer.suggest}</div><hr class="chalkline">
       <div style="text-align:center;font-size:40px;margin:8px"><span class="btn clickable" id="pm">−</span>
@@ -60778,6 +60886,81 @@ TIPS.update = function(dt){
     return;
   }
 };
+
+</script>
+<script>/* ===== 23_taste.js ===== */
+"use strict";
+/* TASTE — M3. Customers finally have appetites.
+   Depends entirely on M2: before beers had a STYLE and a PURITY there was
+   nothing for anyone to have an opinion about. Four mechanisms, cheapest first:
+     · style preference   — every archetype likes and dislikes real styles
+     · red/green requests — required condition + paid bonus (Potion Craft)
+     · popularity decay   — the same style every night sags (Moonlighter)
+     · class reputation   — per archetype, not per person (Recettear)
+   All of it reads through PUB.appeal so the sim and the price tag can't drift. */
+
+const TASTE = {};
+
+/* ---------- popularity (per style, decays nightly) ---------- */
+TASTE.pop = function(styleKey){
+  if(!G_STATE || !G_STATE.pop) return 1;
+  const fatigue=G_STATE.pop[styleKey]||0;
+  return clamp(1-fatigue, DATA.POP.floor, DATA.POP.ceil);
+};
+TASTE.notePour = function(beer){
+  if(!G_STATE.pop) G_STATE.pop={};
+  const k=beer.style||"lager";
+  G_STATE.pop[k]=clamp((G_STATE.pop[k]||0)+DATA.POP.perPint, 0, 1-DATA.POP.floor);
+  /* every OTHER style recovers a little — variety is actively rewarded */
+  for(const s in G_STATE.pop) if(s!==k) G_STATE.pop[s]=Math.max(0,G_STATE.pop[s]-DATA.POP.perPint*0.25);
+};
+TASTE.decayDay = function(){
+  if(!G_STATE.pop) return;
+  for(const s in G_STATE.pop) G_STATE.pop[s]=Math.max(0, G_STATE.pop[s]-DATA.POP.decayPerDay);
+};
+
+/* ---------- reputation (per archetype) ---------- */
+TASTE.rep = function(type){ return (G_STATE && G_STATE.rep && G_STATE.rep[type]) || 0; };
+TASTE.noteRep = function(type, delta){
+  if(!G_STATE.rep) G_STATE.rep={};
+  G_STATE.rep[type]=clamp((G_STATE.rep[type]||0)+delta, 0, DATA.REP.max);
+};
+/* each level adds to what that class will spend */
+TASTE.walletMul = function(type){ return 1 + TASTE.rep(type)*DATA.REP.budgetPerLevel; };
+
+/* ---------- style preference ---------- */
+TASTE.styleMod = function(beer, type){
+  const def=DATA.CUSTOMERS[type]; if(!def || !beer) return 0;
+  if(def.purist) return ((beer.purity||0)-0.85)*6;      // Bob judges the RATIO
+  const st=beer.style;
+  if(def.likes && def.likes.includes(st)) return 1.5;
+  if(def.dislikes && def.dislikes.includes(st)) return -1.9;
+  return 0;
+};
+
+/* ---------- requests ---------- */
+TASTE.rollRequest = function(type){
+  const def=DATA.CUSTOMERS[type]||{};
+  if(!(Math.random() < (def.req===undefined?0.3:def.req))) return null;
+  const red=pick(DATA.REQUESTS.red);
+  const green=Math.random()<0.5 ? pick(DATA.REQUESTS.green) : null;
+  return { red, green };
+};
+TASTE.meetsRed = function(beer, req){
+  if(!req || !req.red) return true;
+  try{ return !!req.red.test(beer); }catch(e){ return true; }
+};
+TASTE.greenPay = function(beer, req){
+  if(!req || !req.green) return 0;
+  try{ return req.green.test(beer) ? req.green.pay : 0; }catch(e){ return 0; }
+};
+TASTE.requestText = function(req){
+  if(!req) return null;
+  return req.green ? `${req.red.txt} — ${req.green.txt}` : req.red.txt;
+};
+
+/* ---------- daily hook ---------- */
+BUS.on("newday", ()=>{ if(G_STATE) TASTE.decayDay(); });
 
 </script>
 </body>

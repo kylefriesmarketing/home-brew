@@ -163,14 +163,70 @@ DATA.HATS = {
 };
 
 /* ---- customers ---- */
+/* M3: `likes`/`dislikes` are STYLE keys — now that ratio decides the style, the
+   pub can have opinions. `req` is how often this archetype arrives with a
+   demand. Locals are the honest-beer crowd; tourists chase novelty; the Hop
+   Snob is unbearable on purpose. */
 DATA.CUSTOMERS = {
-  local:  { name:"Local",  wallet:9,  sense:1.2, tipMul:0.8, fameMul:1.4, col:0x7a6a4c, chat:["evenin'","the usual, if it's drinkable","how's the roof holdin' up?"] },
-  tourist:{ name:"Tourist",wallet:22, sense:0.6, tipMul:1.6, fameMul:1.0, col:0xe86a5a, chat:["is this CRAFT?","we drove nine hours!","do y'all have wifi?"] },
-  hiker:  { name:"Hiker",  wallet:12, sense:0.3, tipMul:1.0, fameMul:0.7, col:0x5a8a5a, chat:["water first. then beer.","I smelled this place from the ridge","carbs are carbs"] },
-  joe:    { name:"Hollow Joe", wallet:99, sense:0, tipMul:3.0, fameMul:1.0, col:0x6a6a7a, special:true },
-  bob:    { name:"Barleycorn Bob", wallet:30, sense:0.8, tipMul:1.0, fameMul:0, col:0xd8c8a0, special:true, chat:["*scribbles*","don't mind me. reviewing.","mm. yes. words."] },
-  cope:   { name:"Copperhead", wallet:45, sense:1.0, tipMul:2.2, fameMul:1.2, col:0x5e4a3a, special:true, chat:["...place ain't terrible","don't tell NOBODY I'm here","still say it's yard soup. good yard soup."] },
+  local:  { name:"Local",  wallet:9,  sense:1.2, tipMul:0.8, fameMul:1.4, col:0x7a6a4c, req:0.30,
+            likes:["lager","amber","porter"], dislikes:["curio","gose"],
+            chat:["evenin'","the usual, if it's drinkable","how's the roof holdin' up?"] },
+  tourist:{ name:"Tourist",wallet:22, sense:0.6, tipMul:1.6, fameMul:1.0, col:0xe86a5a, req:0.55,
+            likes:["fruit","sour","honey","curio"], dislikes:["lager"],
+            chat:["is this CRAFT?","we drove nine hours!","do y'all have wifi?"] },
+  hiker:  { name:"Hiker",  wallet:12, sense:0.3, tipMul:1.0, fameMul:0.7, col:0x5a8a5a, req:0.15,
+            likes:["stout","porter","honey"], dislikes:[],
+            chat:["water first. then beer.","I smelled this place from the ridge","carbs are carbs"] },
+  snob:   { name:"Hop Snob",wallet:26,sense:0.7, tipMul:1.3, fameMul:1.6, col:0x6a5a8a, req:0.85,
+            likes:["ipa","stout","saison"], dislikes:["lager","honey","fruit"],
+            chat:["what's your hop bill?","I only drink unfiltered","is this… pasteurised?"] },
+  student:{ name:"Student", wallet:7, sense:1.5, tipMul:0.5, fameMul:0.9, col:0xe8c23d, req:0.05,
+            likes:["lager","amber","fruit"], dislikes:[],
+            chat:["cheapest thing you got","is there a student discount","I have four dollars"] },
+  joe:    { name:"Hollow Joe", wallet:99, sense:0, tipMul:3.0, fameMul:1.0, col:0x6a6a7a, special:true,
+            req:0, likes:["curio","gose","sour"], dislikes:[] },
+  bob:    { name:"Barleycorn Bob", wallet:30, sense:0.8, tipMul:1.0, fameMul:0, col:0xd8c8a0, special:true,
+            req:0, likes:[], dislikes:[], purist:true,   // Bob scores the RATIO, not the style
+            chat:["*scribbles*","don't mind me. reviewing.","mm. yes. words."] },
+  cope:   { name:"Copperhead", wallet:45, sense:1.0, tipMul:2.2, fameMul:1.2, col:0x5e4a3a, special:true,
+            req:0, likes:["stout","ipa","porter"], dislikes:["fruit"],
+            chat:["...place ain't terrible","don't tell NOBODY I'm here","still say it's yard soup. good yard soup."] },
 };
+
+/* ============================================================================
+   REQUESTS — Potion Craft's red/green conditions, the cheapest way to make all
+   four axes pay. RED is required (they walk without it); GREEN is optional and
+   pays a premium. With a pool this size no single recipe satisfies the room,
+   which is what finally kills monoculture at the demand end.
+   `test(beer)` reads the style/axes the M2 restructure now provides.
+   ============================================================================ */
+DATA.REQUESTS = {
+  red: [
+    { key:"bitter",  txt:"somethin' BITTER",        test:b=>b.axes.b>=b.axes.s },
+    { key:"sweet",   txt:"somethin' SWEET",         test:b=>b.axes.s>b.axes.b },
+    { key:"nofunk",  txt:"nothin' funky",           test:b=>b.axes.f<=1 },
+    { key:"noweird", txt:"nothin' WEIRD",           test:b=>b.axes.w<=0 },
+    { key:"dark",    txt:"a dark one",              test:b=>["stout","porter","ipa"].includes(b.style) },
+    { key:"easy",    txt:"somethin' easy-drinkin'", test:b=>["lager","amber","honey","fruit"].includes(b.style) },
+    { key:"decent",  txt:"anythin' that ain't swill", test:b=>b.tier!=="swill" },
+  ],
+  green: [
+    { key:"funky",   txt:"bonus if it's got FUNK",   pay:0.40, test:b=>b.axes.f>=2 },
+    { key:"weird",   txt:"bonus if it's WEIRD",      pay:0.55, test:b=>b.axes.w>=2 },
+    { key:"clean",   txt:"bonus for a clean pour",   pay:0.35, test:b=>(b.purity||0)>=0.95 },
+    { key:"strong",  txt:"bonus if it's a big'un",   pay:0.35, test:b=>(b.total||0)>=9 },
+    { key:"legend",  txt:"bonus for somethin' famous",pay:0.75, test:b=>!!b.legendary },
+  ],
+};
+
+/* Moonlighter's popularity curve: pour the same style every night and it sags
+   on its own. Monoculture punishes itself — no balance patch required. */
+/* ⚠️ decayPerDay was 0.34 — which fully cleared a night's fatigue by morning,
+   so monoculture never actually compounded. At 0.12 a second night on the same
+   style starts already sagging, which is the pressure to rotate. */
+DATA.POP = { perPint:0.085, decayPerDay:0.12, floor:0.75, ceil:1.25 };
+/* Recettear: reputation tracked PER CUSTOMER CLASS, not per individual. */
+DATA.REP = { perGoodPint:0.09, perBadPint:-0.14, max:5, budgetPerLevel:0.10 };
 
 /* ---- Bob's press column (reviews are wrong in funny ways, even the raves) ---- */
 DATA.BOB_PRESS = {

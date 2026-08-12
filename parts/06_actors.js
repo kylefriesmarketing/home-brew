@@ -227,6 +227,8 @@ const CUSTOMER_LOOKS = {
   joe:    ()=>({skin:0xcabd9e, shirt:0x5a5a6a, pants:0x4a4a52, hat:"hood", accessory:"lantern"}),
   bob:    ()=>({skin:0xe8b48c, shirt:0xc9bd9a, pants:0x6a5a48, hat:"bucket", accessory:"camera"}),
   cope:   ()=>({skin:0xc98c5a, shirt:0x5e4a3a, pants:0x3a3a32, hat:"straw", belly:true}),
+  snob:   ()=>({skin:pick([0xf0c8a0,0xc98c5a]), shirt:pick([0x6a5a8a,0x3a4a5a]), pants:0x2a2a32, hat:pick(["beanie",null]), accessory:"pack"}),
+  student:()=>({skin:pick([0xe8b48c,0x8a5a3a,0xf0c8a0]), shirt:pick([0xe8c23d,0x5a8ae8,0xc94c6a]), pants:0x4a4a6a, hat:pick(["trucker",null,null])}),
 };
 function makeCustomer(type){
   const look=CUSTOMER_LOOKS[type]();

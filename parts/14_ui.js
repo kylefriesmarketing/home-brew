@@ -189,14 +189,21 @@ UI.priceDialog = function(i){
       T.price<=T.beer.suggest*1.15? "fair mountain price" :
       T.price<=T.beer.suggest*1.8? "tourist pricing 👀" : "highway robbery (they WILL notice)";
     /* who'll actually drink it — read straight off the sim's own appetite math */
-    const who=[["local","🧢 Locals"],["tourist","📷 Tourists"],["hiker","🥾 Hikers"]].map(([k,label])=>{
+    const who=[["local","🧢 Locals"],["tourist","📷 Tourists"],["hiker","🥾 Hikers"],
+               ["snob","🎩 Snobs"],["student","🎒 Students"]].map(([k,label])=>{
       const yes=PUB.willBuy(T.beer, T.price, k);
-      return `<span style="opacity:${yes?1:0.38}">${yes?"✅":"❌"} ${label}</span>`;
+      const d=DATA.CUSTOMERS[k];
+      const loves=d.likes && d.likes.includes(T.beer.style);
+      const hates=d.dislikes && d.dislikes.includes(T.beer.style);
+      return `<span style="opacity:${yes?1:0.38}">${yes?"✅":"❌"} ${label}${loves?"♥":hates?"✗":""}</span>`;
     }).join(" &nbsp; ");
     const locals=PUB.willBuy(T.beer,T.price,"local");
-    const note = locals
+    /* M3: pouring one style all week makes it sag — show that here */
+    const fatigue=(typeof TASTE!=="undefined")?TASTE.pop(T.beer.style):1;
+    const tired = fatigue<0.93 ? `<br><span style="color:#e58873">The room's tired of ${T.beer.styleName||"this"} (${Math.round(fatigue*100)}% appeal) — pour somethin' else.</span>` : "";
+    const note = (locals
       ? "Locals drink here — they tip small but they <b>talk</b> (fame ×1.4)."
-      : "Priced for passers-through. Tourists pay it; the regulars walk.";
+      : "Priced for passers-through. Tourists pay it; the regulars walk.") + tired;
     return `<h1>🏷️ “${T.beer.name}”</h1>
       <div class="sub">${T.beer.tierName} · suggested $${T.beer.suggest}</div><hr class="chalkline">
       <div style="text-align:center;font-size:40px;margin:8px"><span class="btn clickable" id="pm">−</span>

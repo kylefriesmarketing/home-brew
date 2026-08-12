@@ -1,9 +1,52 @@
-# HOME BREW — dev notes (v1.6, content-complete campaign)
+# HOME BREW — dev notes (v1.7, content-complete campaign)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v1.7 — **MILESTONE 3 of 6: APPETITES & DEMAND** ✅ (`23_taste.js`)
+
+M2 gave beer an identity; M3 gives the pub an opinion about it. Four mechanisms,
+all routed through the single `PUB.appeal` formula so the sim and the price tag
+can never drift apart.
+
+- 🎭 **Five archetypes with real taste.** Locals want honest beer (lager, amber,
+  porter) and recoil from Curiosity; tourists chase novelty (fruit, sour, and
+  yes, Curiosity); hikers want calories; the new **Hop Snob** only respects IPA,
+  stout and saison and turns his nose up at anything sweet; the new **Student**
+  has seven dollars and no standards. Snobs start appearing as you get famous.
+  Measured, same beer, same price: local **+1.3** on an amber and **−2.1** on a
+  Curiosity, while a tourist rates that same Curiosity **+4.3**.
+- 📋 **Red/green requests** (Potion Craft). A RED condition is a hard gate —
+  they walk rather than settle — and a GREEN one pays a premium (+35–75%).
+  Rolled per archetype (the Snob asks 85% of the time, the Student 5%), spoken
+  in a bubble at the bar, because **a request nobody can see is just a silent
+  refusal that reads as the game being broken.**
+- 📉 **Popularity decay** (Moonlighter). Every pint of a style adds fatigue,
+  every *other* style recovers a little, so variety is actively rewarded. Floor
+  0.75× / ceiling 1.25×. ⚠️ `decayPerDay` was 0.34, which cleared a whole
+  night's fatigue by morning so monoculture never compounded — at **0.12** a
+  second night on the same style starts already sagging.
+- 🤝 **Per-class reputation** (Recettear). Tracked per archetype, not per
+  person; each level adds 10% to what that whole class will spend. Serving
+  someone the style they love counts 1.6×; swill costs you.
+
+**The headline result — the second tap stopped being decoration.** Averaged over
+three full evenings each:
+
+| Setup | Conversion | Gross |
+|---|---|---|
+| One tap (amber only) | 72% | $185 |
+| Two taps (amber + IPA) | 82% | $323 |
+| Two taps (amber + saison) | 74% | **$357** |
+
+**Covering the range nearly doubles the take.** The assessment called the two
+taps decorative; they're now the core strategic lever, and the way to answer a
+room full of conflicting requests.
+
+- 🏷️ The price tag shows all five archetypes, marks ♥ when they love the style,
+  and warns when the room is tired of what you're pouring.
 
 ## New in v1.6 — **MILESTONE 2 of 6: THE EQUATION** ✅
 

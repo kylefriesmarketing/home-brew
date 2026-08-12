@@ -26,6 +26,7 @@ ECON.freshState = function(){
     spentGrain:0, bearStage:0,
     weather:"clear", power:true, leafDay:false, cleanNights:0,
     puddles:[], brags:{},
+    pop:{}, rep:{},                   // M3: style fatigue + per-archetype reputation
   };
 };
 ECON.newState = function(){

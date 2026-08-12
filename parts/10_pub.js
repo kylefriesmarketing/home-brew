@@ -130,15 +130,23 @@ PUB.kickKeg = function(i){
 /* customer lifecycle */
 PUB.spawnCustomer = function(type){
   if(!type){
+    /* five regular archetypes now; the Snob shows up as you get famous */
+    const fame=G_STATE? G_STATE.fame : 0;
     const r=Math.random();
-    type = r<0.5?"local": r<0.8?"tourist":"hiker";
+    const snobChance=clamp(fame/450, 0, 0.16);
+    type = r<0.34?"local" : r<0.58?"tourist" : r<0.74?"hiker"
+         : r<0.74+snobChance?"snob" : "student";
   }
   const rig=makeCustomer(type);
   rig.setPos(11.5+rand(-1,1), 28);
   WORLD.scene.add(rig.group);
   const c={
     rig, type, def:DATA.CUSTOMERS[type], state:"toDoor", t:0, seed:rand(10),
-    chosen:-1, drunk:0, pints:0, patience:26, mug:null, spot:null, wallet:DATA.CUSTOMERS[type].wallet*(0.8+rand(0.4)),
+    chosen:-1, drunk:0, pints:0, patience:26, mug:null, spot:null,
+    /* reputation with this CLASS raises what they'll spend (Recettear) */
+    wallet:DATA.CUSTOMERS[type].wallet*(0.8+rand(0.4))
+      *((typeof TASTE!=="undefined")?TASTE.walletMul(type):1),
+    req:(typeof TASTE!=="undefined")?TASTE.rollRequest(type):null,
   };
   PUB.customers.push(c);
   if(Math.random()<0.5 && c.def.chat) setTimeout(()=>{ if(!c.dead) UI.bubbleRig(rig, pick(c.def.chat), 2400); }, rand(1000,4000));
@@ -147,7 +155,11 @@ PUB.spawnCustomer = function(type){
 
 /* the ONE appetite formula — the sim and the price tag both read it, so the
    readout can never drift from what customers actually do */
-PUB.appeal = function(beer, price, type){
+/* M3: the ONE appetite formula now also carries taste — style preference,
+   popularity fatigue and the customer's standing request. `cust` is optional:
+   the price tag asks the ARCHETYPE-level question (no specific request), the
+   sim passes the actual customer. */
+PUB.appeal = function(beer, price, type, cust){
   if(type==="joe"){
     const cursedIng=beer.ing.some(t=>DATA.INGREDIENTS[t].cursed);
     return (beer.axes.w>=2||cursedIng||beer.legendary) ? 10 : -1;
@@ -155,12 +167,18 @@ PUB.appeal = function(beer, price, type){
   const def=DATA.CUSTOMERS[type]||DATA.CUSTOMERS.local;
   let v = beer.score*1.35 - price*def.sense;
   if(beer.legendary) v+=2.2;
+  if(typeof TASTE!=="undefined"){
+    v += TASTE.styleMod(beer, type);                 // they like it / they don't
+    v *= TASTE.pop(beer.style);                      // poured it all week? it sags
+    /* a RED condition is a hard gate — they walk rather than settle */
+    if(cust && cust.req && !TASTE.meetsRed(beer, cust.req)) return -99;
+  }
   return v;
 };
 /* would a typical one buy? (the +0.15 is the mean of the rand spread below) */
 PUB.willBuy = function(beer, price, type){
   const def=DATA.CUSTOMERS[type]||DATA.CUSTOMERS.local;
-  if(price>def.wallet) return false;
+  if(price>def.wallet*((typeof TASTE!=="undefined")?TASTE.walletMul(type):1)) return false;
   return PUB.appeal(beer,price,type)+0.15 > 0.2;
 };
 
@@ -170,7 +188,7 @@ PUB.chooseTap = function(c){
     const T=G_STATE.taps[i];
     if(!T.beer||T.pints<=0) continue;
     if(T.price>c.wallet) continue;
-    const v = PUB.appeal(T.beer, T.price, c.type) + (c.type==="joe"?0:rand(-0.5,0.8));
+    const v = PUB.appeal(T.beer, T.price, c.type, c) + (c.type==="joe"?0:rand(-0.5,0.8));
     if(v>bv){ bv=v; best=i; }
   }
   return best;
@@ -183,8 +201,12 @@ PUB.serve = function(c){
   PUB.lastPourTap=c.chosen;
   SFX.play("pour",c.rig.x,c.rig.z);
   T.pints--;
-  const paid = c.type==="joe"? T.price*3 : T.price;
+  /* GREEN condition pays a premium on top */
+  const green=(typeof TASTE!=="undefined")?TASTE.greenPay(T.beer, c.req):0;
+  const paid = (c.type==="joe"? T.price*3 : T.price) * (1+green);
+  c.greenHit=green>0;
   ECON.earn(paid, "beer");
+  if(typeof TASTE!=="undefined") TASTE.notePour(T.beer);
   SFX.play("chaching",16.8,-5.9);
   c.wallet-=T.price;
   c.beer=T.beer; c.paidPrice=T.price; c.state="toSpot"; c.pints++;
@@ -223,6 +245,19 @@ PUB.finishDrink = function(c){
   const beer=c.beer, r=c.rig;
   if(c.mug){ c.rig.parts.armR.remove(c.mug); c.mug=null; }
   const fm=c.def.fameMul;
+  /* M3: reputation with this CLASS moves on every pint — good beer for the
+     people who wanted it raises what the whole class will spend next time */
+  if(typeof TASTE!=="undefined"){
+    const liked=TASTE.styleMod(beer,c.type)>0;
+    const bad=beer.tier==="swill";
+    TASTE.noteRep(c.type, bad? DATA.REP.perBadPint
+      : (liked? DATA.REP.perGoodPint*1.6 : DATA.REP.perGoodPint));
+    if(c.greenHit){
+      SFX.play("chaching",r.x,r.z);
+      UI.bubbleRig(r, pick(["EXACTLY what I wanted","you READ my mind","that's the one"]), 2200);
+      STORY.fame(1.5*fm,"request met");
+    }
+  }
   /* the pairing payoff */
   if(c.dish){
     if(c.dishPaired && beer.tier!=="swill"){
@@ -329,9 +364,16 @@ PUB.update = function(dt){
           c.state="order"; c.patience=26;
           if(c.type==="joe" && Math.random()<0.8)
             setTimeout(()=>{ if(!c.dead) UI.bubbleRig(c.rig, `<span class="who">Hollow Joe</span>“${STORY.joeHint()}”`, 6500); }, 900);
+          /* say what you came in for — a request nobody can SEE is just a
+             silent refusal, which reads as the game being broken */
+          if(c.req && typeof TASTE!=="undefined")
+            setTimeout(()=>{ if(!c.dead) UI.bubbleRig(c.rig, "“"+TASTE.requestText(c.req)+"”", 4200); }, 500);
           c.chosen=PUB.chooseTap(c);
           if(c.chosen<0){
-            UI.bubbleRig(r, pick(c.type==="joe"?["nothing WRONG on tap. shame."]:["nothin' on tap??","too rich for my blood","I'll come back"]), 2200);
+            const gated = c.req && G_STATE.taps.some(T=>T.beer&&T.pints>0&&!TASTE.meetsRed(T.beer,c.req));
+            UI.bubbleRig(r, pick(c.type==="joe"?["nothing WRONG on tap. shame."]
+              : gated?["that ain't what I asked for","not what I came for","…nope"]
+              :["nothin' on tap??","too rich for my blood","I'll come back"]), 2200);
             c.state="leave"; STORY.fame(-0.5,"no sale");
           }
         }
