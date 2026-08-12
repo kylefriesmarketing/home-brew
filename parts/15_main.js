@@ -5,7 +5,7 @@ const MAIN = {
   player:null, started:false, mode:"walk",   // walk | fork | boil | ui | sleep
   input:{up:false,down:false,left:false,right:false,run:false,lift:false,lower:false,fire:false,vent:false,stir:false},
   ePressed:false, qPressed:false,
-  camYaw:0, camPitch:0.60, camDist:14.5, camTarget:new THREE.Vector3(),
+  camYaw:0, camPitch:0.60, camDist:14.5, camMax:24, camTarget:new THREE.Vector3(),
   camPos:new THREE.Vector3(0,10,20),
   promptStation:null, promptItem:null,
   time:0,
@@ -54,7 +54,8 @@ MAIN.bindInput = function(){
     if(dragging){ MAIN.camYaw -= (e.clientX-lx)*0.006; lx=e.clientX; }
   });
   addEventListener("pointerup", ()=>dragging=false);
-  addEventListener("wheel", e=>{ MAIN.camDist=clamp(MAIN.camDist+Math.sign(e.deltaY)*1.2, 7, 24); }, {passive:true});
+  /* M5: the ceiling grows with your rank so the empire becomes visible */
+  addEventListener("wheel", e=>{ MAIN.camDist=clamp(MAIN.camDist+Math.sign(e.deltaY)*1.2, 7, MAIN.camMax||24); }, {passive:true});
 };
 
 /* ---------- interact scan ---------- */
@@ -265,6 +266,7 @@ MAIN.tick = function(dt, skipRender){
   if(typeof ALIVE!=="undefined") ALIVE.update(dt);
   if(typeof SEASONS!=="undefined") SEASONS.update(dt);
   if(typeof TIPS!=="undefined") TIPS.update(dt);
+  if(typeof WILD!=="undefined") WILD.update(dt);
   UI.update(dt);
 
   if(MAIN.mode==="walk"||MAIN.mode==="fork") MAIN.scanInteract();
@@ -311,6 +313,7 @@ MAIN.boot = function(){
   if(typeof ALIVE!=="undefined") ALIVE.setup();
   if(typeof SEASONS!=="undefined") SEASONS.setup();
   if(typeof TIPS!=="undefined") TIPS.setup();
+  if(typeof WILD!=="undefined") WILD.setup();
   UI.setup();
 
   let last=performance.now();

@@ -1,9 +1,39 @@
-# HOME BREW — dev notes (v1.8, content-complete campaign)
+# HOME BREW — dev notes (v1.9, content-complete campaign)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v1.9 — **MILESTONE 5 of 6: PRESENCE & THE MOUNTAIN** ✅ (`24_wild.js`)
+
+- 🌿 **The mountain has pockets now.** It was a set, not a place — no
+  collectible, no secret, no reason to walk anywhere without a task, and the
+  spring/glacier trails paid out exactly one water tier each. **18 forage
+  patches** across the terrain (blackberry brambles, wild hop vines, ramp
+  patches, pawpaw trees, bee trees, wild apples) — free ingredients if you walk
+  for them, one pick per patch per day. **They're SEASONAL**, so the calendar
+  now drives where you go: fall 12 ripe / winter 2 / spring 6 / summer 9. Winter
+  genuinely starves you, which is exactly what winter should do.
+- 🐍 **Copperhead comes to YOU.** The assessment's sharpest finding: he sits at
+  (−46.4, −3.8) — **47 units away, across the crick, outside the frustum at
+  every legal camera distance** — for 11 of his 14 scenes. So the day-1 heckle
+  that opens the entire rivalry, *"That ain't beer, boy. That's YARD SOUP,"* was
+  most likely **never seen by anyone**. He now drives his pickup into your yard
+  and stands there: measured **16.6 units from the player**, in frame, then
+  drives home. Same for the Mystery Jar beat.
+- 📜 **`DATA.COPPERHEAD.jarNote` is finally read.** The best-written string in
+  the file — the handwritten note that comes with the jar — had **zero
+  references outside data.js.** It's shown now.
+- 👮 **Ranger Dot exists.** She was 3 strings and no body, yet her big moment is
+  a *button label* ("EXPOSE HIM — Ranger Dot saw everything"). She now walks a
+  real patrol of the road, yard edge and trailhead, goes home at night, and has
+  something to say — and what she says depends on whether you've been serving
+  swill or letting the dumpster pile up.
+- 🔭 **The camera pulls back with your rank.** Bible §4 and §18 both promise
+  this as the "one mountain, deepening" payoff; `camDist` was written in exactly
+  one place — the mouse wheel. The ceiling now grows **24 → 41.5** across the
+  ranks, so the empire becomes visible as you build it.
 
 ## New in v1.8 — **MILESTONE 4 of 6: TENSION & THE LATE GAME** ✅
 

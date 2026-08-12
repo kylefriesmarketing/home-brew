@@ -90,15 +90,25 @@ STORY.copperSay = function(txt, ms=4000){
 };
 
 STORY.onDay = function(day){
-  /* day-1 heckle */
-  if(day===1) STORY.at(10, ()=>{ STORY.copperSay(DATA.COPPERHEAD.heckle1, 6000); SFX.play("honk",-48,-6); });
+  /* ⚠️ M5 — the day-1 heckle that OPENS the entire rivalry used to be spoken
+     from (−46,−4): across the crick, outside the frustum at every legal camera
+     distance, most likely never seen by anyone. He drives in now. */
+  if(day===1) STORY.at(10, ()=>{
+    if(!(typeof WILD!=="undefined" && WILD.copeDriveIn(DATA.COPPERHEAD.heckle1, 6000)))
+      STORY.copperSay(DATA.COPPERHEAD.heckle1, 6000);
+    SFX.play("honk",6,26);
+  });
   /* day-2: the mystery jar on the porch */
   if(day===2 && !G_STATE.flags.jarGiven){
     G_STATE.flags.jarGiven=true;
     const p=WORLD.anchors.porch;
     spawnItem("jarGift", p.x, p.z, {});
     STORY.at(6,()=>{ toast("Something's sitting on your porch step…","gold",4000);
-      STORY.copperSay("Found that in the back o' the still. Figured yer swill could use help.",5000); });
+      /* DATA.COPPERHEAD.jarNote — the best-written string in the file — had
+         ZERO references outside data.js. It is finally read aloud. */
+      STORY.at(3.5, ()=>toast(DATA.COPPERHEAD.jarNote,"gold",6500));
+      if(!(typeof WILD!=="undefined" && WILD.copeDriveIn("Found that in the back o' the still. Figured yer swill could use help.",5000)))
+        STORY.copperSay("Found that in the back o' the still. Figured yer swill could use help.",5000); });
   }
   /* sabotage era after rank 1 */
   if(G_STATE.rank>=1 && day>2 && !G_STATE.flags["sab"+day] && Math.random()<0.35){

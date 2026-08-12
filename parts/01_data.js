@@ -219,6 +219,27 @@ DATA.REQUESTS = {
   ],
 };
 
+/* ============================================================================
+   M5 — THE MOUNTAIN HAS POCKETS. It was a set, not a place: no collectible, no
+   secret, no reason to walk anywhere without a task, and the spring/glacier
+   trails paid out exactly one water tier each. Foraging gives the terrain a
+   reason to exist — and it's SEASONAL, so the calendar drives where you walk.
+   ============================================================================ */
+DATA.FORAGE = [
+  { key:"blackberry", name:"Blackberry Bramble", ing:"blackberry", col:0x3a2a4a,
+    seasons:["summer","fall"], spots:[[-26,14],[-24,-2],[30,10],[-33,20]] },
+  { key:"hops",  name:"Wild Hop Vine",  ing:"hops",   col:0x86b04c,
+    seasons:["summer","fall"], spots:[[24,-14],[-30,-14],[33,-4]] },
+  { key:"ramps", name:"Ramp Patch",     ing:"ramps",  col:0x9ed07a,
+    seasons:["spring"], spots:[[8,-24],[-2,-20],[14,-30],[-20,-18]] },
+  { key:"pawpaw",name:"Pawpaw Tree",    ing:"pawpaw", col:0xa8c24c,
+    seasons:["fall"], spots:[[18,-20],[-27,-22],[27,18]] },
+  { key:"honey", name:"Bee Tree",       ing:"honey",  col:0xe8a33d,
+    seasons:["spring","summer"], spots:[[-16,-26],[21,-34]] },
+  { key:"apple", name:"Wild Apple",     ing:"apple",  col:0xc84c3a,
+    seasons:["fall","winter"], spots:[[-34,4],[31,-24]] },
+];
+
 /* Moonlighter's popularity curve: pour the same style every night and it sags
    on its own. Monoculture punishes itself — no balance patch required. */
 /* ⚠️ decayPerDay was 0.34 — which fully cleared a night's fatigue by morning,
