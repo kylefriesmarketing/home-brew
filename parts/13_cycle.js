@@ -125,22 +125,43 @@ CYCLE.startGame = function(fresh){
   SFX.rank=G_STATE.rank;
 };
 
+/* M4 — the nightly cost of BEING a brewery. Scales with fame, machines and
+   staff, so success itself raises the bar: a stock problem becomes a flow
+   problem, which is the whole reason tycoon games stay tense. */
+CYCLE.upkeep = function(){
+  const T=DATA.TUNE, g=G_STATE;
+  const machines=Object.keys(g.machines||{}).filter(k=>g.machines[k]&&!(DATA.MACHINES[k]||{}).staff).length;
+  const staff=Object.keys(g.machines||{}).filter(k=>g.machines[k]&&(DATA.MACHINES[k]||{}).staff).length;
+  return Math.round(T.upkeepBase + g.fame*T.upkeepPerFame + machines*T.upkeepPerMachine + staff*T.upkeepPerStaff);
+};
+
 CYCLE.tallyLines = function(){
   const L=G_STATE.ledger;
   const lines=[];
   lines.push(["🍺 Beer sales", fmt$(L.sales)]);
   lines.push(["💝 Tips", fmt$(L.tips)]);
   lines.push(["📦 Spent", "−"+fmt$(L.spent)]);
-  const net=L.sales+L.tips-L.spent;
+  if(L.upkeep) lines.push(["🧾 Upkeep", "−"+fmt$(L.upkeep)]);
+  const net=L.sales+L.tips-L.spent-(L.upkeep||0);
   lines.push(["— Net", fmt$(net)]);
   if(L.fameDelta) lines.push(["⭐ Fame", (L.fameDelta>0?"+":"")+Math.round(L.fameDelta)]);
   return lines;
 };
 
 CYCLE.finishSleep = function(){
+  /* the night's bills come due BEFORE the ledger resets, so they show in the
+     tally you just read */
+  const up=CYCLE.upkeep();
+  G_STATE.cash-=up;
+  G_STATE.ledger.upkeep=up;
+  let upkeepLine=null;
+  if(G_STATE.cash<0){
+    G_STATE.cash=0;
+    upkeepLine=`🧾 Upkeep ate everything you had (−${fmt$(up)}). The lights stay on. Barely.`;
+  } else if(up>0) upkeepLine=`🧾 Upkeep: −${fmt$(up)} (fame, machines, wages)`;
   /* advance the world one night */
   G_STATE.day++;
-  G_STATE.ledger={sales:0,tips:0,spent:0,fameDelta:0,notes:[]};
+  G_STATE.ledger={sales:0,tips:0,spent:0,fameDelta:0,notes:[],upkeep:0};
   for(const F of G_STATE.ferms){ if(F.beer&&!F.ready){ F.days--; if(F.days<=0) F.ready=true; } }
   const loanLine=STORY.loanDaily();
   CYCLE.phase="morning"; CYCLE.phaseT=0;
@@ -157,6 +178,7 @@ CYCLE.finishSleep = function(){
   SFX.play("rooster");
   setTimeout(()=>{
     toast(`🌄 Day ${G_STATE.day} on the mountain.`,"",3000);
+    if(upkeepLine) setTimeout(()=>toast(upkeepLine, G_STATE.cash<=0?"bad":"",3400),900);
     if(loanLine) setTimeout(()=>toast(loanLine, loanLine.includes("REPO")?"bad":"","3600"),1500);
     const ready=G_STATE.ferms.filter(f=>f.ready).length;
     if(ready) setTimeout(()=>toast(`🫧 ${ready} fermenter${ready>1?"s":""} ready to keg!`,"gold",3000),2600);

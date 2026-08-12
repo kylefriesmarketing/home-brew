@@ -154,7 +154,7 @@ kbd{background:#3a3128;color:#ffd98a;border-radius:4px;border:1px solid #6b4a2f;
     <div class="credit">a Dirty Boy Devs joint · The Room</div>
   </div>
   <div class="bigfade" id="fade"></div>
-  <div id="verchip">home brew v1.7</div>
+  <div id="verchip">home brew v1.8</div>
 </div>
 <script>
 (function(){
@@ -53550,6 +53550,17 @@ DATA.TUNE = {
   startCash: 60,
   phaseLen: { morning: 115, afternoon: 135, evening: 170 },
   legendBonus: 1.0,                 // a Legendary always beats the best generic on that water
+  /* M4 — automate the CHORE, never the JUDGMENT (PlateUp!). Machines keep you
+     in the band so you can't fail; they just earn less credit for it. Coasting
+     on three machines yields ~0.67× quality, so top-tier beer always wants
+     your hands. Automation becomes safety + parallelism, not a replacement. */
+  autoCreditLoss: 0.11,
+  handsForLegend: 0.35,             // fraction of the boil you must actually work
+  /* fame-scaled upkeep — converts a STOCK problem (cash) into a FLOW problem,
+     which is the whole reason tycoon games stay tense. Total sink used to be
+     ~$4,460 and then cash meant nothing forever. */
+  upkeepBase: 4, upkeepPerFame: 0.08, upkeepPerMachine: 3, upkeepPerStaff: 18,
+  grannyDriftPerBrew: 0.14,         // she wanders out of calibration; E to reset
   rockScale: 7,                     // porch rocker time speed-up
   standMarkup: 1.75,                // MawMaw's farm-stand convenience surcharge
   standKegPrice: 26,                // her one spare keg (catalog: 15. she knows.)
@@ -53557,7 +53568,11 @@ DATA.TUNE = {
   boilTime: 38,
   fermentDays: 1,
   kegCost: 15,
-  loanAmount: 200, loanVig: 10, repoAt: 3,
+  /* ⚠️ the loan needed cash<12 AND no keg AND no pints AND no fermenting —
+     it almost never fired, so bible §11 beat 4 ("your lowest moment is his
+     best scene") was effectively dead content. Reachable now, and it COMPOUNDS,
+     so it can actually spiral the way the story wants it to. */
+  loanAmount: 200, loanVig: 10, repoAt: 3, loanInterest: 0.06, loanGate: 30,
   fine: 25,
   custBase: 3.2,        // customers/min at fame 0 evening
   custFame: 0.035,      // + per fame point
@@ -55820,7 +55835,11 @@ BREW.startBoil = function(){
   BREW.boil={
     t:0, dur:DATA.TUNE.boilTime,
     heat:0.45, pres:0.25,
-    heatDrift:(on("granny")?0.55:1)*0.11*((typeof SEASONS!=="undefined")?DATA.SEASONS[SEASONS.current].heat:1),
+    /* Granny wanders out of calibration with use — her help decays from 0.55
+       back toward 1.0 until you walk over and reset her dial (PlateUp's
+       unreliable-automation lesson) */
+    heatDrift:(on("granny")? lerp(0.55,1,clamp(G_STATE.grannyDrift||0,0,1)) : 1)
+      *0.11*((typeof SEASONS!=="undefined")?DATA.SEASONS[SEASONS.current].heat:1),
     presRise:(on("governor")?0.55:1)*0.055*storm,
     bandH:[0.42,0.72], bandP:[0.1,0.55],
     good:0, stir:1, scorchT:0, blowT:0,
@@ -55853,6 +55872,7 @@ BREW.stirTap = function(){
     return;
   }
   b.stir=clamp(b.stir+0.22,0,1);
+  b.stirRecent=0.9;                 // a stir counts as hands-on for a beat
   SFX.play("glug");
 };
 
@@ -55976,7 +55996,26 @@ BREW.update = function(dt){
   // scoring
   const inH=b.heat>=b.bandH[0]&&b.heat<=b.bandH[1];
   const inP=b.pres>=b.bandP[0]&&b.pres<=b.bandP[1];
-  if(inH&&inP) b.good+=dt*(0.6+0.4*b.stir);
+  /* ⚠️ M4 — AUTOMATE THE CHORE, NEVER THE JUDGMENT. For $340 (Whirlybird +
+     Granny + Governor) the boil used to become a metronome with two beats: a
+     heat correction every 5s and a vent every 9.5s, on a 38s minigame. The
+     machines still hold the bands so you can't FAIL — they just earn less
+     credit while they do it. Hands on the controls = full credit; coasting on
+     three machines ≈ 0.67×, which is comfortably below the 71% Legendary gate.
+     Automation is now safety and parallelism, not a replacement for you. */
+  if(inH&&inP){
+    const handsOn = I.fire || I.vent || I.stir || b.stirRecent>0;
+    let cred=1;
+    if(!handsOn){
+      const auto=(G_STATE.machines.granny?1:0)+(G_STATE.machines.governor?1:0)
+                +(G_STATE.machines.whirlybird?1:0);
+      if(G_STATE.power!==false) cred=1-auto*DATA.TUNE.autoCreditLoss;
+    }
+    b.good+=dt*(0.6+0.4*b.stir)*cred;
+    b.autoCred=cred;
+    if(handsOn) b.hands=(b.hands||0)+dt;      // time you actually worked it
+  }
+  b.stirRecent=Math.max(0,(b.stirRecent||0)-dt);
   // dangers
   if(b.heat>0.93){ b.scorchT+=dt; if(b.scorchT>1.8&&!b.scorched){ b.scorched=true; toast("💀 SCORCHED. It tastes like campfire regret.","bad"); SFX.play("sizzle",K.x,K.z);} }
   else b.scorchT=0;
@@ -56019,6 +56058,19 @@ BREW.blowLid = function(){
 BREW.finishBoil = function(blown){
   const b=BREW.boil, k=G_STATE.kettle;
   let exec = 0.3 + 1.2*clamp(b.good/(b.dur*0.62),0,1);
+  /* ⚠️ THE HANDS-ON GATE. Trimming automated credit alone did nothing — the
+     quality bar only needs 62% of the boil in-band, so a 33% credit cut still
+     maxed out inside the slack (measured: coasting all three machines still
+     scored 100%). So the rule is explicit instead of emergent: machines can
+     carry you to a reliable GREAT, but Legendary-grade execution requires that
+     you actually worked the kettle. Automation = safety and parallelism;
+     excellence stays manual. */
+  const handsFrac=(b.hands||0)/b.dur;
+  if(exec>1.14 && handsFrac<DATA.TUNE.handsForLegend){
+    exec=1.14;
+    if(!b._gated){ b._gated=true;
+      setTimeout(()=>toast("🤖 The machines held it steady — but a Legendary wants YOUR hands on the kettle.","",4200),900); }
+  }
   if(b.scorched) exec=Math.min(exec,0.6);
   if(blown) exec=0.3;
   exec=clamp(exec,0.3,1.5);
@@ -56063,6 +56115,13 @@ BREW.finishBoil = function(blown){
   if(BREW.raccoonProp){ WORLD.scene.remove(BREW.raccoonProp); BREW.raccoonProp=null; }
   /* spent grain piles up — the Boys are watching */
   G_STATE.spentGrain=(G_STATE.spentGrain||0)+DATA.TUNE.grainPerBrew;
+  if(G_STATE.machines.granny){
+    G_STATE.grannyDrift=clamp((G_STATE.grannyDrift||0)+DATA.TUNE.grannyDriftPerBrew,0,1);
+    if(G_STATE.grannyDrift>0.55 && !G_STATE.flags._grannyWarn){
+      G_STATE.flags._grannyWarn=true;
+      setTimeout(()=>toast("🔧 Granny's Dial has wandered off true. Give it a knock (E).","bad",4000),3000);
+    }
+  }
   if(WORLD.props.dumpsterGrain){
     WORLD.props.dumpsterGrain.visible=G_STATE.spentGrain>0;
     WORLD.props.dumpsterGrain.scale.setScalar(0.6+Math.min(G_STATE.spentGrain,5)*0.18);
@@ -56451,8 +56510,20 @@ PUB.update = function(dt){
       PUB.spawnT=1/Math.max(rate,0.01)*(0.6+rand(0.8));
       PUB.spawnCustomer();
     }
+    /* ⚠️ M4 — Joe IS the discovery system (the recipe space is ~4,840 states for
+       15 findable recipes, so brute force is correctly impossible and the hints
+       are the only way in). But he only ever appeared if a cursed beer was ON
+       TAP — and cursed beers are Swill by construction, costing −2 to −4 fame a
+       pint plus a Ranger Dot fine. To unlock discovery you had to repeatedly do
+       the thing the fame system punishes, for ~15 evenings.
+       He wanders down on his own now; a cursed tap still summons him (and he
+       still pays triple for it). */
     const anyCursed=G_STATE.taps.some(T=>T.beer&&(T.beer.axes.w>=2||T.beer.ing.some(t=>DATA.INGREDIENTS[t].cursed)));
-    if(anyCursed && !PUB.joeCame){ PUB.joeCame=true; setTimeout(()=>PUB.spawnCustomer("joe"),rand(3000,9000)); }
+    const owed=(G_STATE.day-(G_STATE.flags.joeLast||-3))>=3;
+    if(!PUB.joeCame && (anyCursed || (owed && G_STATE.day>=3 && Math.random()<0.02))){
+      PUB.joeCame=true; G_STATE.flags.joeLast=G_STATE.day;
+      setTimeout(()=>PUB.spawnCustomer("joe"),rand(3000,9000));
+    }
   }
   /* AI steps */
   for(const c of PUB.customers){
@@ -56596,6 +56667,7 @@ ECON.freshState = function(){
     weather:"clear", power:true, leafDay:false, cleanNights:0,
     puddles:[], brags:{},
     pop:{}, rep:{},                   // M3: style fatigue + per-archetype reputation
+    grannyDrift:0,                    // M4: the thermostat wanders out of true
   };
 };
 ECON.newState = function(){
@@ -57064,10 +57136,14 @@ STORY.onPhase = function(ph){
 /* ---------- the Loan ---------- */
 STORY.maybeOfferLoan = function(){
   if(G_STATE.loan || G_STATE.flags.loanOffered) return false;
-  const desperate = G_STATE.cash < 12 &&
+  /* ⚠️ this used to require cash<12 AND no filled keg AND no tapped pints AND
+     no fermenting batch — four conditions at once, so it almost never fired and
+     bible §11 beat 4 ("your lowest moment is his best scene") was dead content
+     most players never saw. Now: broke, with nothing ready to sell. A fermenting
+     batch no longer saves you, because upkeep is due tonight either way. */
+  const desperate = G_STATE.cash < DATA.TUNE.loanGate &&
     !ITEMS.list.some(i=>i.kind==="keg"&&i.data.state==="filled") &&
-    !G_STATE.taps.some(t=>t.beer&&t.pints>0) &&
-    !G_STATE.ferms.some(f=>f.beer);
+    !G_STATE.taps.some(t=>t.beer&&t.pints>0);
   if(!desperate) return false;
   G_STATE.flags.loanOffered=true;
   UI.loanOffer();
@@ -57092,6 +57168,9 @@ STORY.copperTeleportPorch = function(fn){
 };
 STORY.loanDaily = function(){
   const L=G_STATE.loan; if(!L) return null;
+  /* it COMPOUNDS now — the balance never used to move, so the debt could never
+     spiral and the whole "with teeth" framing was a bluff */
+  L.bal=Math.round(L.bal*(1+DATA.TUNE.loanInterest));
   if(G_STATE.cash>=DATA.TUNE.loanVig){
     G_STATE.cash-=DATA.TUNE.loanVig; G_STATE.ledger.spent+=DATA.TUNE.loanVig;
     return `🐍 Copperhead's taste: −${fmt$(DATA.TUNE.loanVig)}`;
@@ -57322,22 +57401,43 @@ CYCLE.startGame = function(fresh){
   SFX.rank=G_STATE.rank;
 };
 
+/* M4 — the nightly cost of BEING a brewery. Scales with fame, machines and
+   staff, so success itself raises the bar: a stock problem becomes a flow
+   problem, which is the whole reason tycoon games stay tense. */
+CYCLE.upkeep = function(){
+  const T=DATA.TUNE, g=G_STATE;
+  const machines=Object.keys(g.machines||{}).filter(k=>g.machines[k]&&!(DATA.MACHINES[k]||{}).staff).length;
+  const staff=Object.keys(g.machines||{}).filter(k=>g.machines[k]&&(DATA.MACHINES[k]||{}).staff).length;
+  return Math.round(T.upkeepBase + g.fame*T.upkeepPerFame + machines*T.upkeepPerMachine + staff*T.upkeepPerStaff);
+};
+
 CYCLE.tallyLines = function(){
   const L=G_STATE.ledger;
   const lines=[];
   lines.push(["🍺 Beer sales", fmt$(L.sales)]);
   lines.push(["💝 Tips", fmt$(L.tips)]);
   lines.push(["📦 Spent", "−"+fmt$(L.spent)]);
-  const net=L.sales+L.tips-L.spent;
+  if(L.upkeep) lines.push(["🧾 Upkeep", "−"+fmt$(L.upkeep)]);
+  const net=L.sales+L.tips-L.spent-(L.upkeep||0);
   lines.push(["— Net", fmt$(net)]);
   if(L.fameDelta) lines.push(["⭐ Fame", (L.fameDelta>0?"+":"")+Math.round(L.fameDelta)]);
   return lines;
 };
 
 CYCLE.finishSleep = function(){
+  /* the night's bills come due BEFORE the ledger resets, so they show in the
+     tally you just read */
+  const up=CYCLE.upkeep();
+  G_STATE.cash-=up;
+  G_STATE.ledger.upkeep=up;
+  let upkeepLine=null;
+  if(G_STATE.cash<0){
+    G_STATE.cash=0;
+    upkeepLine=`🧾 Upkeep ate everything you had (−${fmt$(up)}). The lights stay on. Barely.`;
+  } else if(up>0) upkeepLine=`🧾 Upkeep: −${fmt$(up)} (fame, machines, wages)`;
   /* advance the world one night */
   G_STATE.day++;
-  G_STATE.ledger={sales:0,tips:0,spent:0,fameDelta:0,notes:[]};
+  G_STATE.ledger={sales:0,tips:0,spent:0,fameDelta:0,notes:[],upkeep:0};
   for(const F of G_STATE.ferms){ if(F.beer&&!F.ready){ F.days--; if(F.days<=0) F.ready=true; } }
   const loanLine=STORY.loanDaily();
   CYCLE.phase="morning"; CYCLE.phaseT=0;
@@ -57354,6 +57454,7 @@ CYCLE.finishSleep = function(){
   SFX.play("rooster");
   setTimeout(()=>{
     toast(`🌄 Day ${G_STATE.day} on the mountain.`,"",3000);
+    if(upkeepLine) setTimeout(()=>toast(upkeepLine, G_STATE.cash<=0?"bad":"",3400),900);
     if(loanLine) setTimeout(()=>toast(loanLine, loanLine.includes("REPO")?"bad":"","3600"),1500);
     const ready=G_STATE.ferms.filter(f=>f.ready).length;
     if(ready) setTimeout(()=>toast(`🫧 ${ready} fermenter${ready>1?"s":""} ready to keg!`,"gold",3000),2600);
@@ -58668,18 +58769,24 @@ EVENTS.onDay = function(day){
 };
 
 EVENTS.onPhase = function(ph){
+  /* ⚠️ M4 — the bible's stated defence of automation is "storms knock it
+     offline", but the blackout only ever rolled in the EVENING, when nobody is
+     brewing. It never once threatened the boil, which is the thing automation
+     trivialises. Storms can now cut the power in any working phase. */
+  if((ph==="morning"||ph==="afternoon"||ph==="evening")
+     && G_STATE.weather==="storm" && !EVENTS.blackoutRolled){
+    EVENTS.blackoutRolled=true;
+    const delay=rand(15,50);
+    const at=ph;
+    STORY.at(delay, ()=>{
+      if(CYCLE.phase!==at) return;
+      G_STATE.power=false;
+      SFX.play("thunder"); shake(0.7);
+      toast(BREW.boil ? "💥 POWER'S OUT — MID-BOIL. It's all you now."
+                      : DATA.EVENTS.blackout, "bad", 5000);
+    });
+  }
   if(ph==="evening"){
-    /* storm blackout roll */
-    if(G_STATE.weather==="storm" && !EVENTS.blackoutRolled){
-      EVENTS.blackoutRolled=true;
-      const delay=rand(15,50);
-      STORY.at(delay, ()=>{
-        if(CYCLE.phase!=="evening") return;
-        G_STATE.power=false;
-        SFX.play("thunder"); shake(0.7);
-        toast(DATA.EVENTS.blackout,"bad",5000);
-      });
-    }
     /* leaf bus */
     if(G_STATE.leafDay){ EVENTS.busAnim={t:0, phase:"in"}; }
     /* bear invasion at stage 2+ */
@@ -59042,6 +59149,19 @@ HOMESTEAD.setup = function(){
     prompt(){ if(!G_STATE || MAIN.mode!=="walk") return null;
       return "🧺 MawMaw's stand — buy what ya forgot"; },
     action(){ HOMESTEAD.shop(); }
+  });
+  /* M4: knock Granny's dial back to true */
+  WORLD.addStation({ id:"granny", x:-16.4, z:-5.4, r:2.2,
+    prompt(){ if(!G_STATE || !G_STATE.machines.granny || MAIN.mode!=="walk") return null;
+      const d=G_STATE.grannyDrift||0;
+      if(d<0.12) return "Granny's Dial — reading true";
+      return `🔧 Recalibrate Granny's Dial (${Math.round(d*100)}% off true)`; },
+    action(){
+      if((G_STATE.grannyDrift||0)<0.12){ toast("She's fine. Leave her be.","",1500); return; }
+      G_STATE.grannyDrift=0; G_STATE.flags._grannyWarn=false;
+      SFX.play("clank",-16.4,-5.4); MAIN.player.squash=0.2;
+      toast("🔧 Gave her a knock. Reads true again.","",2200);
+    }
   });
   WORLD.addStation({ id:"rocker", x:-16.9, z:7.5, r:2.2,
     prompt(){ if(!G_STATE || MAIN.mode!=="walk") return null;

@@ -1,9 +1,53 @@
-# HOME BREW — dev notes (v1.7, content-complete campaign)
+# HOME BREW — dev notes (v1.8, content-complete campaign)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v1.8 — **MILESTONE 4 of 6: TENSION & THE LATE GAME** ✅
+
+- 🤖 **Automation stopped deleting the minigame.** For $340 (Whirlybird +
+  Granny + Governor) the 38-second boil became a metronome with two beats.
+  ⚠️ **Trimming automated credit alone did nothing** — the quality bar only
+  needs 62% of the boil in-band, so a 33% credit cut still maxed out inside the
+  slack (measured: coasting all three machines still scored 100%). So the rule
+  is explicit rather than emergent: **`handsForLegend` — Legendary-grade
+  execution requires you to have actually worked the kettle for ≥35% of the
+  boil.** Machines still hold the bands so you can't fail; they just can't hand
+  you the top rung. Measured:
+
+  | Setup | Execution | Result |
+  |---|---|---|
+  | All 3 machines, never touch it | 1.14 | Good |
+  | All 3 machines, 20% hands-on | 1.14 | Good |
+  | All 3 machines, 40% hands-on | 1.50 | **LEGENDARY** |
+  | No machines, fully hands-on | 1.50 | **LEGENDARY** |
+
+- ⛈️ **Blackouts can finally reach a boil.** The bible's stated defence of
+  automation is "storms knock it offline" — but the blackout only ever rolled in
+  the EVENING, when nobody is brewing. Storms now cut power in any working
+  phase, and in the dark Granny's help vanishes (heat drift 0.06 → 0.11).
+- 🔧 **Granny drifts out of calibration** with use (her 0.55× help decaying back
+  toward 1.0), and you knock her back to true with E. PlateUp's
+  unreliable-automation lesson.
+- 🧾 **Fame-scaled upkeep** — the total money sink used to be ~$4,460, after
+  which cash meant nothing forever. Every night now bills base + fame + machines
+  + wages: **$8 early, $29 mid, $100 late.** A stock problem becomes a flow
+  problem, which is the whole reason tycoon games stay tense.
+- 🐍 **The loan can actually happen now.** It required cash<12 AND no filled keg
+  AND no tapped pints AND no fermenting batch — four conditions at once, so
+  bible §11 beat 4 ("your lowest moment is his best scene") was dead content most
+  players never saw. Now: broke, with nothing ready to sell. **And it COMPOUNDS**
+  (6%/day) — the balance never moved before, so the debt could never spiral and
+  "with teeth" was a bluff. Measured: 200 → 268 over five days.
+- 👃 **Hollow Joe is ungated.** He IS the discovery system — the recipe space is
+  ~4,840 states for 15 findable recipes, so the hints are the only way in — but
+  he only appeared if a cursed beer was ON TAP, and cursed beers are Swill by
+  construction (−2 to −4 fame a pint plus a Ranger Dot fine). **To unlock
+  discovery you had to repeatedly do the thing the fame system punishes.** He
+  now wanders down on his own; a cursed tap still summons him, and still pays
+  triple.
 
 ## New in v1.7 — **MILESTONE 3 of 6: APPETITES & DEMAND** ✅ (`23_taste.js`)
 

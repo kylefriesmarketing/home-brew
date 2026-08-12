@@ -342,6 +342,17 @@ DATA.TUNE = {
   startCash: 60,
   phaseLen: { morning: 115, afternoon: 135, evening: 170 },
   legendBonus: 1.0,                 // a Legendary always beats the best generic on that water
+  /* M4 — automate the CHORE, never the JUDGMENT (PlateUp!). Machines keep you
+     in the band so you can't fail; they just earn less credit for it. Coasting
+     on three machines yields ~0.67× quality, so top-tier beer always wants
+     your hands. Automation becomes safety + parallelism, not a replacement. */
+  autoCreditLoss: 0.11,
+  handsForLegend: 0.35,             // fraction of the boil you must actually work
+  /* fame-scaled upkeep — converts a STOCK problem (cash) into a FLOW problem,
+     which is the whole reason tycoon games stay tense. Total sink used to be
+     ~$4,460 and then cash meant nothing forever. */
+  upkeepBase: 4, upkeepPerFame: 0.08, upkeepPerMachine: 3, upkeepPerStaff: 18,
+  grannyDriftPerBrew: 0.14,         // she wanders out of calibration; E to reset
   rockScale: 7,                     // porch rocker time speed-up
   standMarkup: 1.75,                // MawMaw's farm-stand convenience surcharge
   standKegPrice: 26,                // her one spare keg (catalog: 15. she knows.)
@@ -349,7 +360,11 @@ DATA.TUNE = {
   boilTime: 38,
   fermentDays: 1,
   kegCost: 15,
-  loanAmount: 200, loanVig: 10, repoAt: 3,
+  /* ⚠️ the loan needed cash<12 AND no keg AND no pints AND no fermenting —
+     it almost never fired, so bible §11 beat 4 ("your lowest moment is his
+     best scene") was effectively dead content. Reachable now, and it COMPOUNDS,
+     so it can actually spiral the way the story wants it to. */
+  loanAmount: 200, loanVig: 10, repoAt: 3, loanInterest: 0.06, loanGate: 30,
   fine: 25,
   custBase: 3.2,        // customers/min at fame 0 evening
   custFame: 0.035,      // + per fame point

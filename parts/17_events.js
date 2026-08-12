@@ -44,18 +44,24 @@ EVENTS.onDay = function(day){
 };
 
 EVENTS.onPhase = function(ph){
+  /* ⚠️ M4 — the bible's stated defence of automation is "storms knock it
+     offline", but the blackout only ever rolled in the EVENING, when nobody is
+     brewing. It never once threatened the boil, which is the thing automation
+     trivialises. Storms can now cut the power in any working phase. */
+  if((ph==="morning"||ph==="afternoon"||ph==="evening")
+     && G_STATE.weather==="storm" && !EVENTS.blackoutRolled){
+    EVENTS.blackoutRolled=true;
+    const delay=rand(15,50);
+    const at=ph;
+    STORY.at(delay, ()=>{
+      if(CYCLE.phase!==at) return;
+      G_STATE.power=false;
+      SFX.play("thunder"); shake(0.7);
+      toast(BREW.boil ? "💥 POWER'S OUT — MID-BOIL. It's all you now."
+                      : DATA.EVENTS.blackout, "bad", 5000);
+    });
+  }
   if(ph==="evening"){
-    /* storm blackout roll */
-    if(G_STATE.weather==="storm" && !EVENTS.blackoutRolled){
-      EVENTS.blackoutRolled=true;
-      const delay=rand(15,50);
-      STORY.at(delay, ()=>{
-        if(CYCLE.phase!=="evening") return;
-        G_STATE.power=false;
-        SFX.play("thunder"); shake(0.7);
-        toast(DATA.EVENTS.blackout,"bad",5000);
-      });
-    }
     /* leaf bus */
     if(G_STATE.leafDay){ EVENTS.busAnim={t:0, phase:"in"}; }
     /* bear invasion at stage 2+ */

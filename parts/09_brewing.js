@@ -337,7 +337,11 @@ BREW.startBoil = function(){
   BREW.boil={
     t:0, dur:DATA.TUNE.boilTime,
     heat:0.45, pres:0.25,
-    heatDrift:(on("granny")?0.55:1)*0.11*((typeof SEASONS!=="undefined")?DATA.SEASONS[SEASONS.current].heat:1),
+    /* Granny wanders out of calibration with use — her help decays from 0.55
+       back toward 1.0 until you walk over and reset her dial (PlateUp's
+       unreliable-automation lesson) */
+    heatDrift:(on("granny")? lerp(0.55,1,clamp(G_STATE.grannyDrift||0,0,1)) : 1)
+      *0.11*((typeof SEASONS!=="undefined")?DATA.SEASONS[SEASONS.current].heat:1),
     presRise:(on("governor")?0.55:1)*0.055*storm,
     bandH:[0.42,0.72], bandP:[0.1,0.55],
     good:0, stir:1, scorchT:0, blowT:0,
@@ -370,6 +374,7 @@ BREW.stirTap = function(){
     return;
   }
   b.stir=clamp(b.stir+0.22,0,1);
+  b.stirRecent=0.9;                 // a stir counts as hands-on for a beat
   SFX.play("glug");
 };
 
@@ -493,7 +498,26 @@ BREW.update = function(dt){
   // scoring
   const inH=b.heat>=b.bandH[0]&&b.heat<=b.bandH[1];
   const inP=b.pres>=b.bandP[0]&&b.pres<=b.bandP[1];
-  if(inH&&inP) b.good+=dt*(0.6+0.4*b.stir);
+  /* ⚠️ M4 — AUTOMATE THE CHORE, NEVER THE JUDGMENT. For $340 (Whirlybird +
+     Granny + Governor) the boil used to become a metronome with two beats: a
+     heat correction every 5s and a vent every 9.5s, on a 38s minigame. The
+     machines still hold the bands so you can't FAIL — they just earn less
+     credit while they do it. Hands on the controls = full credit; coasting on
+     three machines ≈ 0.67×, which is comfortably below the 71% Legendary gate.
+     Automation is now safety and parallelism, not a replacement for you. */
+  if(inH&&inP){
+    const handsOn = I.fire || I.vent || I.stir || b.stirRecent>0;
+    let cred=1;
+    if(!handsOn){
+      const auto=(G_STATE.machines.granny?1:0)+(G_STATE.machines.governor?1:0)
+                +(G_STATE.machines.whirlybird?1:0);
+      if(G_STATE.power!==false) cred=1-auto*DATA.TUNE.autoCreditLoss;
+    }
+    b.good+=dt*(0.6+0.4*b.stir)*cred;
+    b.autoCred=cred;
+    if(handsOn) b.hands=(b.hands||0)+dt;      // time you actually worked it
+  }
+  b.stirRecent=Math.max(0,(b.stirRecent||0)-dt);
   // dangers
   if(b.heat>0.93){ b.scorchT+=dt; if(b.scorchT>1.8&&!b.scorched){ b.scorched=true; toast("💀 SCORCHED. It tastes like campfire regret.","bad"); SFX.play("sizzle",K.x,K.z);} }
   else b.scorchT=0;
@@ -536,6 +560,19 @@ BREW.blowLid = function(){
 BREW.finishBoil = function(blown){
   const b=BREW.boil, k=G_STATE.kettle;
   let exec = 0.3 + 1.2*clamp(b.good/(b.dur*0.62),0,1);
+  /* ⚠️ THE HANDS-ON GATE. Trimming automated credit alone did nothing — the
+     quality bar only needs 62% of the boil in-band, so a 33% credit cut still
+     maxed out inside the slack (measured: coasting all three machines still
+     scored 100%). So the rule is explicit instead of emergent: machines can
+     carry you to a reliable GREAT, but Legendary-grade execution requires that
+     you actually worked the kettle. Automation = safety and parallelism;
+     excellence stays manual. */
+  const handsFrac=(b.hands||0)/b.dur;
+  if(exec>1.14 && handsFrac<DATA.TUNE.handsForLegend){
+    exec=1.14;
+    if(!b._gated){ b._gated=true;
+      setTimeout(()=>toast("🤖 The machines held it steady — but a Legendary wants YOUR hands on the kettle.","",4200),900); }
+  }
   if(b.scorched) exec=Math.min(exec,0.6);
   if(blown) exec=0.3;
   exec=clamp(exec,0.3,1.5);
@@ -580,6 +617,13 @@ BREW.finishBoil = function(blown){
   if(BREW.raccoonProp){ WORLD.scene.remove(BREW.raccoonProp); BREW.raccoonProp=null; }
   /* spent grain piles up — the Boys are watching */
   G_STATE.spentGrain=(G_STATE.spentGrain||0)+DATA.TUNE.grainPerBrew;
+  if(G_STATE.machines.granny){
+    G_STATE.grannyDrift=clamp((G_STATE.grannyDrift||0)+DATA.TUNE.grannyDriftPerBrew,0,1);
+    if(G_STATE.grannyDrift>0.55 && !G_STATE.flags._grannyWarn){
+      G_STATE.flags._grannyWarn=true;
+      setTimeout(()=>toast("🔧 Granny's Dial has wandered off true. Give it a knock (E).","bad",4000),3000);
+    }
+  }
   if(WORLD.props.dumpsterGrain){
     WORLD.props.dumpsterGrain.visible=G_STATE.spentGrain>0;
     WORLD.props.dumpsterGrain.scale.setScalar(0.6+Math.min(G_STATE.spentGrain,5)*0.18);

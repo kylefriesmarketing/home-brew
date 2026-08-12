@@ -27,6 +27,7 @@ ECON.freshState = function(){
     weather:"clear", power:true, leafDay:false, cleanNights:0,
     puddles:[], brags:{},
     pop:{}, rep:{},                   // M3: style fatigue + per-archetype reputation
+    grannyDrift:0,                    // M4: the thermostat wanders out of true
   };
 };
 ECON.newState = function(){

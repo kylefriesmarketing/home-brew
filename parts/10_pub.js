@@ -342,8 +342,20 @@ PUB.update = function(dt){
       PUB.spawnT=1/Math.max(rate,0.01)*(0.6+rand(0.8));
       PUB.spawnCustomer();
     }
+    /* ⚠️ M4 — Joe IS the discovery system (the recipe space is ~4,840 states for
+       15 findable recipes, so brute force is correctly impossible and the hints
+       are the only way in). But he only ever appeared if a cursed beer was ON
+       TAP — and cursed beers are Swill by construction, costing −2 to −4 fame a
+       pint plus a Ranger Dot fine. To unlock discovery you had to repeatedly do
+       the thing the fame system punishes, for ~15 evenings.
+       He wanders down on his own now; a cursed tap still summons him (and he
+       still pays triple for it). */
     const anyCursed=G_STATE.taps.some(T=>T.beer&&(T.beer.axes.w>=2||T.beer.ing.some(t=>DATA.INGREDIENTS[t].cursed)));
-    if(anyCursed && !PUB.joeCame){ PUB.joeCame=true; setTimeout(()=>PUB.spawnCustomer("joe"),rand(3000,9000)); }
+    const owed=(G_STATE.day-(G_STATE.flags.joeLast||-3))>=3;
+    if(!PUB.joeCame && (anyCursed || (owed && G_STATE.day>=3 && Math.random()<0.02))){
+      PUB.joeCame=true; G_STATE.flags.joeLast=G_STATE.day;
+      setTimeout(()=>PUB.spawnCustomer("joe"),rand(3000,9000));
+    }
   }
   /* AI steps */
   for(const c of PUB.customers){

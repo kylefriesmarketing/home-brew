@@ -244,6 +244,19 @@ HOMESTEAD.setup = function(){
       return "🧺 MawMaw's stand — buy what ya forgot"; },
     action(){ HOMESTEAD.shop(); }
   });
+  /* M4: knock Granny's dial back to true */
+  WORLD.addStation({ id:"granny", x:-16.4, z:-5.4, r:2.2,
+    prompt(){ if(!G_STATE || !G_STATE.machines.granny || MAIN.mode!=="walk") return null;
+      const d=G_STATE.grannyDrift||0;
+      if(d<0.12) return "Granny's Dial — reading true";
+      return `🔧 Recalibrate Granny's Dial (${Math.round(d*100)}% off true)`; },
+    action(){
+      if((G_STATE.grannyDrift||0)<0.12){ toast("She's fine. Leave her be.","",1500); return; }
+      G_STATE.grannyDrift=0; G_STATE.flags._grannyWarn=false;
+      SFX.play("clank",-16.4,-5.4); MAIN.player.squash=0.2;
+      toast("🔧 Gave her a knock. Reads true again.","",2200);
+    }
+  });
   WORLD.addStation({ id:"rocker", x:-16.9, z:7.5, r:2.2,
     prompt(){ if(!G_STATE || MAIN.mode!=="walk") return null;
       if(CYCLE.phase==="night") return "Rocker. (past rockin' hours)";

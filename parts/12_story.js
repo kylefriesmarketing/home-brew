@@ -151,10 +151,14 @@ STORY.onPhase = function(ph){
 /* ---------- the Loan ---------- */
 STORY.maybeOfferLoan = function(){
   if(G_STATE.loan || G_STATE.flags.loanOffered) return false;
-  const desperate = G_STATE.cash < 12 &&
+  /* ⚠️ this used to require cash<12 AND no filled keg AND no tapped pints AND
+     no fermenting batch — four conditions at once, so it almost never fired and
+     bible §11 beat 4 ("your lowest moment is his best scene") was dead content
+     most players never saw. Now: broke, with nothing ready to sell. A fermenting
+     batch no longer saves you, because upkeep is due tonight either way. */
+  const desperate = G_STATE.cash < DATA.TUNE.loanGate &&
     !ITEMS.list.some(i=>i.kind==="keg"&&i.data.state==="filled") &&
-    !G_STATE.taps.some(t=>t.beer&&t.pints>0) &&
-    !G_STATE.ferms.some(f=>f.beer);
+    !G_STATE.taps.some(t=>t.beer&&t.pints>0);
   if(!desperate) return false;
   G_STATE.flags.loanOffered=true;
   UI.loanOffer();
@@ -179,6 +183,9 @@ STORY.copperTeleportPorch = function(fn){
 };
 STORY.loanDaily = function(){
   const L=G_STATE.loan; if(!L) return null;
+  /* it COMPOUNDS now — the balance never used to move, so the debt could never
+     spiral and the whole "with teeth" framing was a bluff */
+  L.bal=Math.round(L.bal*(1+DATA.TUNE.loanInterest));
   if(G_STATE.cash>=DATA.TUNE.loanVig){
     G_STATE.cash-=DATA.TUNE.loanVig; G_STATE.ledger.spent+=DATA.TUNE.loanVig;
     return `🐍 Copperhead's taste: −${fmt$(DATA.TUNE.loanVig)}`;
