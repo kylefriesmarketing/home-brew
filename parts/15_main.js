@@ -276,6 +276,7 @@ MAIN.tick = function(dt, skipRender){
   if(typeof SEASONS!=="undefined") SEASONS.update(dt);
   if(typeof TIPS!=="undefined") TIPS.update(dt);
   if(typeof WILD!=="undefined") WILD.update(dt);
+  if(typeof REGULARS!=="undefined") REGULARS.update(dt);
   UI.update(dt);
 
   if(MAIN.mode==="walk"||MAIN.mode==="fork") MAIN.scanInteract();

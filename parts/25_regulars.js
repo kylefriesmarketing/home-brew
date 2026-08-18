@@ -93,6 +93,19 @@ REGULARS.claim = function(c){
     else line=pick(r.greets);
   }
   if(line) setTimeout(()=>{ if(!c.dead) UI.bubbleRig(rig, `<span class="who">${r.name} · ${r.who}</span>“${line}”`, hold); }, rand(1200,2600));
+  /* ⚠️ their ambient chat must be re-emitted HERE: spawnCustomer's own 50%
+     chat timer captured the OLD rig, which the swap orphans — UI.update culls
+     bubbles on unparented rigs, so without this the six ROSTER chat arrays
+     were unreachable content (review finding) */
+  if(Math.random()<0.6) setTimeout(()=>{ if(!c.dead) UI.bubbleRig(c.rig, pick(r.chat), 2400); }, rand(7000,12000));
+  /* visual pass: Odell's stray pup, once he admits he's feeding her — she
+     trots in with him and waits, tail going, wherever he settles */
+  if(r.key==="odell" && s.beat>=2 && !REGULARS.pup && typeof makePup==="function"){
+    const pg=makePup();
+    pg.position.set(rig.x-1, rig.y, rig.z-1);
+    WORLD.scene.add(pg);
+    REGULARS.pup={ g:pg, owner:c, ph:rand(10) };
+  }
   /* the USUAL: once known, seeing it on tap matters */
   if(s.fav){
     c.regularFav=s.fav;
@@ -130,15 +143,48 @@ REGULARS.onDrink = function(c, beer){
 /* ---------- June's fiddle — the room holds still for it ---------- */
 REGULARS.startFiddle = function(c){
   REGULARS.fiddle={t:16, c, note:0};
+  /* visual pass: the fiddle is a THING now, tucked at her chin */
+  if(typeof makeFiddle==="function" && c.rig){
+    const f=makeFiddle();
+    f.position.set(-0.28,1.62,0.3); f.rotation.set(-0.5,0.7,-0.35);
+    c.rig.group.add(f);
+    REGULARS.fiddle.prop=f;
+  }
   toast("🎻 June's got the fiddle out. Nobody's leaving yet.","gold",3600);
   for(const o of PUB.customers){ if(!o.dead && o.state!=="leave" && o.state!=="road") o.patience=Math.max(o.patience,14); }
   STORY.fame(2,"June played");
 };
 REGULARS.update = function(dt){
+  /* Odell's pup trots after him, sits when he does */
+  const P=REGULARS.pup;
+  if(P){
+    const o=P.owner;
+    if(!o || o.dead){ WORLD.scene.remove(P.g); REGULARS.pup=null; }
+    else{
+      const r=o.rig, tx=r.x-Math.sin(r.facing)*1.1-0.4, tz=r.z-Math.cos(r.facing)*1.1;
+      const dx=tx-P.g.position.x, dz=tz-P.g.position.z, d=Math.hypot(dx,dz);
+      if(d>0.35){
+        P.g.position.x+=dx/d*Math.min(d,2.2)*dt*1.6; P.g.position.z+=dz/d*Math.min(d,2.2)*dt*1.6;
+        P.g.rotation.y=Math.atan2(dx,dz);
+        P.g.position.y=WORLD.getH(P.g.position.x,P.g.position.z)+Math.abs(Math.sin(CLAY.t*10+P.ph))*0.05;
+      } else P.g.position.y=WORLD.getH(P.g.position.x,P.g.position.z);
+      if(P.g.userData.tail) P.g.userData.tail.rotation.z=Math.sin(CLAY.t*9+P.ph)*0.5;   // always going
+    }
+  }
   const F=REGULARS.fiddle; if(!F) return;
   F.t-=dt;
   const r=F.c && !F.c.dead ? F.c.rig : null;
-  if(!r || F.t<=0){ REGULARS.fiddle=null; return; }
+  if(!r || F.t<=0){
+    if(F.prop && F.prop.parent) F.prop.parent.remove(F.prop);
+    if(r) r.group.rotation.z=0;                  // stop the sway where it stood
+    REGULARS.fiddle=null; return;
+  }
+  /* she sways with it; the bow rocks against the strings */
+  if(F.prop){
+    F.prop.rotation.z=-0.35+Math.sin(CLAY.t*5)*0.08;
+    if(F.prop.userData.bow) F.prop.userData.bow.rotation.x=Math.sin(CLAY.t*7)*0.35;
+  }
+  r.group.rotation.z=Math.sin(CLAY.t*2.4)*0.04;
   F.note-=dt;
   if(F.note<=0){ F.note=0.45+Math.random()*0.35;
     SFX.play(Math.random()<0.7?"ding":"blip", r.x, r.z);

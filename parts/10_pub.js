@@ -132,15 +132,14 @@ PUB.spawnCustomer = function(type){
   if(!type){
     /* five regular archetypes now; the Snob shows up as you get famous */
     const fame=G_STATE? G_STATE.fame : 0;
+    /* ONE weights table — the undercut is a modifier on it, not a second
+       hardcoded ternary chain (which had already drifted from its docs) */
+    const under=!!(G_STATE && G_STATE.flags.undercut);
+    const W={ local:0.34, tourist:under?0.10:0.24, hiker:0.16, snob:clamp(fame/450,0,0.16) };
+    if(under) W.local=0.40, W.hiker=0.22;      // his stand skims the tourists
     const r=Math.random();
-    const snobChance=clamp(fame/450, 0, 0.16);
-    /* Copperhead's roadside stand skims the tourists before they reach you */
-    if(G_STATE && G_STATE.flags.undercut)
-      type = r<0.40?"local" : r<0.50?"tourist" : r<0.72?"hiker"
-           : r<0.72+snobChance?"snob" : "student";
-    else
-      type = r<0.34?"local" : r<0.58?"tourist" : r<0.74?"hiker"
-           : r<0.74+snobChance?"snob" : "student";
+    let acc=0; type="student";
+    for(const k of ["local","tourist","hiker","snob"]){ acc+=W[k]; if(r<acc){ type=k; break; } }
   }
   const rig=makeCustomer(type);
   rig.setPos(11.5+rand(-1,1), 28);

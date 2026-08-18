@@ -9,8 +9,12 @@ const CYCLE = {
 const PHASE_LIGHT = {
   morning:  { sun:[24,20,12], sunI:1.5, sunC:0xffe8c0, hemi:0.75, bg:0x9db8c8, fogN:55, fogF:150, pts:0, fire:0, star:0 },
   afternoon:{ sun:[8,34,6],   sunI:1.7, sunC:0xfff2d8, hemi:0.8,  bg:0xa4c2d4, fogN:60, fogF:160, pts:0, fire:0, star:0 },
-  evening:  { sun:[-26,9,10], sunI:1.05,sunC:0xffb070, hemi:0.5,  bg:0xd28a5e, fogN:45, fogF:130, pts:1.9, fire:0.45, star:0.15 },
-  night:    { sun:[-10,22,-12],sunI:0.26,sunC:0x8a9ad8, hemi:0.34, bg:0x141e2a, fogN:30, fogF:110, pts:3.4, fire:0.9, star:0.95 },
+  /* ⚠️ visual pass, MEASURED not eyeballed: evening (the phase the whole game
+     happens in) read 0.166 mean luma — early-night dark — and night crushed
+     30% of pixels below 0.05. Lifted to evening ≈0.22 / night ≈0.12 while
+     keeping the amber warmth (sat stays ~0.65+). Re-measure before retuning. */
+  evening:  { sun:[-26,11,10], sunI:1.48,sunC:0xffb878, hemi:0.68, bg:0xd28a5e, fogN:48, fogF:135, pts:2.2, fire:0.45, star:0.15 },
+  night:    { sun:[-10,22,-12],sunI:0.42,sunC:0x93a3de, hemi:0.54, bg:0x1a2534, fogN:32, fogF:112, pts:4.3, fire:0.9, star:0.95 },
 };
 
 CYCLE.setup = function(){
@@ -150,12 +154,19 @@ CYCLE.tallyLines = function(){
 
 CYCLE.finishSleep = function(){
   /* Fable pass: the undercut war resolves on QUALITY, not price — pour a great
-     night while his stand is up and word beats cheap */
+     night while his stand is up and word beats cheap.
+     ⚠️ tonight has per-NIGHT semantics that this function must enforce: the
+     evening→night flip stashes good into flags.nightGood before wiping, and
+     sleeping DURING evening skips that wipe entirely — so read the max of
+     both and zero both, or the count either reads 0 after a stellar night or
+     accumulates across days (1 pint/night × 4 nights falsely broke the stand). */
   let underLine=null;
+  const goodNight=Math.max(G_STATE.tonight.good||0, G_STATE.flags.nightGood||0);
+  G_STATE.flags.nightGood=0; G_STATE.tonight.good=0;
   if(G_STATE.flags.undercut){
-    if((G_STATE.tonight.good||0)>=4){
-      G_STATE.flags.undercut=false;
-      G_STATE.flags.undercutBrokeDay=G_STATE.day+1; G_STATE.flags.undercutDays=0;
+    if(goodNight>=4){
+      G_STATE.flags.undercut=false; G_STATE.flags.undercutStart=0;
+      G_STATE.flags.undercutBrokeDay=G_STATE.day+1;
       STORY.fame(6,"word beats cheap");
       underLine="🪧 Copperhead's stand came DOWN overnight. Cheap don't survive a room full of great beer.";
     }

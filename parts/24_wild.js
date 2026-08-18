@@ -117,12 +117,31 @@ WILD.dotUpdate = function(dt){
 };
 
 /* ---------- COPPERHEAD, IN YOUR YARD ---------- */
+/* one-shot story beats queue here — copeDriveIn returns false when the truck
+   is already out, and unique lines (the concession, the legendary reaction)
+   were being silently dropped on collision mornings. The queue drains as the
+   truck frees up; nothing is ever lost. */
+WILD.copeQueue=[];
+WILD.copeSay = function(line, ms, hold){
+  WILD.copeQueue.push({line, ms, hold});
+};
 WILD.copeDriveIn = function(line, ms, hold){
   if(WILD.copeTruck) return false;
   const g=(typeof mkPickup==="function")?mkPickup():null;
   if(!g) return false;
   g.position.set(-70, WORLD.getH(0,27), 26.6);
   g.rotation.y=Math.PI/2;
+  /* visual pass: headlights after dark — evening drive-ins glow up the road */
+  if(CYCLE.phase==="evening"||CYCLE.phase==="night"){
+    /* cached geo+mat — per-spawn allocations are the leak class M6 removed */
+    WILD._lampGeo=WILD._lampGeo||new THREE.SphereGeometry(0.09,8,6);
+    WILD._lampMat=WILD._lampMat||new THREE.MeshBasicMaterial({color:0xffe8b0});
+    const mkLamp=(z)=>{ const l=new THREE.Mesh(WILD._lampGeo, WILD._lampMat);
+      l.position.set(1.55,0.62,z); return l; };
+    g.add(mkLamp(0.45), mkLamp(-0.45));
+    const beam=new THREE.PointLight(0xffd98a, 1.3, 9, 2);
+    beam.position.set(2.2,0.7,0); g.add(beam);
+  }
   WILD.copeTruck={ g, t:0, phase:"in", line, ms:ms||5000, hold:hold||0 };
   return true;
 };
@@ -165,8 +184,11 @@ WILD.update = function(dt){
   WILD.dotUpdate(dt);
   WILD.copeUpdate(dt);
   WILD.coonUpdate(dt);
+  if(!WILD.copeTruck && WILD.copeQueue.length && CYCLE.phase!=="night"){
+    const q=WILD.copeQueue.shift();
+    WILD.copeDriveIn(q.line, q.ms, q.hold);
+  }
   if(WILD.sign) WILD.sign.visible=!!G_STATE.flags.undercut;
-  if(typeof REGULARS!=="undefined") REGULARS.update(dt);
   /* M5: the camera pulls back as the empire grows — bible §4 and §18 both
      promise this as the "one mountain, deepening" payoff, and camDist was
      written in exactly ONE place: the mouse wheel. */
@@ -251,6 +273,6 @@ WORLD.addStation({ id:"coon",
     MAIN.player.squash=0.25;
     toast("🦝 Shooed it clear off the property. It left with most of its dignity.","",3000);
     STORY.fame(1,"varmint patrol");
-    if(Math.random()<0.5) STORY.at(rand(20,40), ()=>WILD.copeDriveIn(DATA.COPPERHEAD.coonShooed, 4200));
+    if(Math.random()<0.5) STORY.at(rand(20,40), ()=>WILD.copeSay(DATA.COPPERHEAD.coonShooed, 4200));
   }
 });

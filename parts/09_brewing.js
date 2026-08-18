@@ -350,6 +350,10 @@ BREW.startBoil = function(){
   };
   G_STATE.flags.sabRaccoon=false;
   if(BREW.boil.raccoon){
+    /* the WILD walker becomes the roof raccoon — without this handoff a boil
+       started mid-walk spawned a SECOND raccoon while the first was visibly
+       crossing the yard, then made it flee */
+    if(typeof WILD!=="undefined" && WILD.coon){ WORLD.scene.remove(WILD.coon.g); WILD.coon=null; }
     const rc=makeRaccoon();
     rc.position.set(WORLD.anchors.kettle.x+0.9, 3.0, WORLD.anchors.kettle.z-2.4-0.9);
     WORLD.scene.add(rc);

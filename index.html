@@ -154,7 +154,7 @@ kbd{background:#3a3128;color:#ffd98a;border-radius:4px;border:1px solid #6b4a2f;
     <div class="credit">a Dirty Boy Devs joint · The Room</div>
   </div>
   <div class="bigfade" id="fade"></div>
-  <div id="verchip">home brew v2.1</div>
+  <div id="verchip">home brew v2.2</div>
 </div>
 <script>
 (function(){
@@ -53537,13 +53537,7 @@ DATA.COPPERHEAD = {
   undercutBroken:"Fine. FINE. Stand's closed. Can't compete with whatever witchcraft yer kettle's doin'.",
   coonShooed:"…that raccoon don't work for me. Officially.",
 };
-/* one line each time the mountain turns over */
-DATA.SEASON_TURN = {
-  spring:"🌱 The crick's runnin' loud again. Spring's on the mountain.",
-  summer:"☀️ The haze settled in overnight. Summer's here — tourists follow the warmth.",
-  fall:"🍁 First red leaf on the porch this morning. Fall's coming down the ridge.",
-  winter:"❄️ Frost on the kettle. Winter's here — the mountain keeps what it grows now.",
-};
+/* (season-turn lines live in SEASONS.applySeason — the ONE announcement site) */
 DATA.JOE_LINES = [
   "…yer floors talk at night. I like that.",
   "brewed anything WRONG lately? I pay for wrong.",
@@ -55068,6 +55062,15 @@ function makePerson(opt={}){
   const nose=claySphere(0.11,skin,0.14,310); nose.position.set(0,-0.02,0.4); head.add(nose);
   const eyes=makeEyes(0.1,0.16); eyes.position.set(0,0.1,0.32); head.add(eyes);
   g.add(head);
+  /* armature seams — the M1 leftover: real claymation figures show a faint
+     crease where separately-moulded parts meet the armature. Thin darkened
+     rings at the neck and shoulder joins; subtle (scale of a fingernail),
+     they read as build lines, not jewellery. */
+  const seamC=new THREE.Color(shirt).multiplyScalar(0.62).getHex();
+  const neckSeam=clayCyl(0.21,0.21,0.07,seamC,0.03,331); neckSeam.position.y=1.62; g.add(neckSeam);
+  const shSeamL=clayCyl(0.135,0.135,0.05,seamC,0.03,332);
+  shSeamL.rotation.z=Math.PI/2; shSeamL.position.set(-0.46,1.35,0); g.add(shSeamL);
+  const shSeamR=shSeamL.clone(); shSeamR.position.x=0.46; g.add(shSeamR);
 
   let hat=null;
   const hats={
@@ -55268,6 +55271,33 @@ function makeCustomer(type){
   const rig=makePerson(Object.assign({size:rand(0.88,1.08)}, look));
   rig.ctype=type;
   return rig;
+}
+
+/* the stray pup that adopts Odell (visual pass — appears after his second
+   story beat, "…I'm feedin' her a little") */
+function makePup(){
+  const g=new THREE.Group();
+  const body=clayCapsule(0.13,0.22,0xb08a5a,0.1,371); body.rotation.z=Math.PI/2; body.position.y=0.18; g.add(body);
+  const head=claySphere(0.12,0xb08a5a,0.1,372); head.position.set(0,0.3,0.2); g.add(head);
+  const snout=claySphere(0.06,0x8a6a42,0.12,373); snout.position.set(0,0.27,0.3); g.add(snout);
+  const earL=claySphere(0.05,0x8a6a42,0.1,374); earL.position.set(-0.08,0.4,0.16); earL.scale.y=1.6; g.add(earL);
+  const earR=earL.clone(); earR.position.x=0.08; g.add(earR);
+  const tail=clayCapsule(0.04,0.14,0xb08a5a,0.12,375); tail.position.set(0,0.26,-0.24); tail.rotation.x=0.9; g.add(tail);
+  g.userData.tail=tail;
+  g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
+  return g;
+}
+
+/* June's fiddle (visual pass — she says she plays; now you can SEE it) */
+function makeFiddle(){
+  const g=new THREE.Group();
+  const body=clayBox(0.16,0.05,0.26,0x8a4a2a,0.06,381); g.add(body);
+  const waist=clayBox(0.11,0.06,0.08,0x8a4a2a,0.06,382); waist.position.z=0.02; g.add(waist);
+  const neck=clayBox(0.035,0.04,0.3,0x5e3a22,0.04,383); neck.position.z=0.26; g.add(neck);
+  const scroll=claySphere(0.035,0x5e3a22,0.06,384); scroll.position.z=0.42; g.add(scroll);
+  const bow=clayBox(0.02,0.02,0.42,0xd8c8a0,0.03,385); bow.position.set(0.1,0.06,0.05); bow.rotation.y=0.5;
+  g.add(bow); g.userData.bow=bow;
+  return g;
 }
 
 </script>
@@ -55970,6 +56000,10 @@ BREW.startBoil = function(){
   };
   G_STATE.flags.sabRaccoon=false;
   if(BREW.boil.raccoon){
+    /* the WILD walker becomes the roof raccoon — without this handoff a boil
+       started mid-walk spawned a SECOND raccoon while the first was visibly
+       crossing the yard, then made it flee */
+    if(typeof WILD!=="undefined" && WILD.coon){ WORLD.scene.remove(WILD.coon.g); WILD.coon=null; }
     const rc=makeRaccoon();
     rc.position.set(WORLD.anchors.kettle.x+0.9, 3.0, WORLD.anchors.kettle.z-2.4-0.9);
     WORLD.scene.add(rc);
@@ -56423,15 +56457,14 @@ PUB.spawnCustomer = function(type){
   if(!type){
     /* five regular archetypes now; the Snob shows up as you get famous */
     const fame=G_STATE? G_STATE.fame : 0;
+    /* ONE weights table — the undercut is a modifier on it, not a second
+       hardcoded ternary chain (which had already drifted from its docs) */
+    const under=!!(G_STATE && G_STATE.flags.undercut);
+    const W={ local:0.34, tourist:under?0.10:0.24, hiker:0.16, snob:clamp(fame/450,0,0.16) };
+    if(under) W.local=0.40, W.hiker=0.22;      // his stand skims the tourists
     const r=Math.random();
-    const snobChance=clamp(fame/450, 0, 0.16);
-    /* Copperhead's roadside stand skims the tourists before they reach you */
-    if(G_STATE && G_STATE.flags.undercut)
-      type = r<0.40?"local" : r<0.50?"tourist" : r<0.72?"hiker"
-           : r<0.72+snobChance?"snob" : "student";
-    else
-      type = r<0.34?"local" : r<0.58?"tourist" : r<0.74?"hiker"
-           : r<0.74+snobChance?"snob" : "student";
+    let acc=0; type="student";
+    for(const k of ["local","tourist","hiker","snob"]){ acc+=W[k]; if(r<acc){ type=k; break; } }
   }
   const rig=makeCustomer(type);
   rig.setPos(11.5+rand(-1,1), 28);
@@ -57230,51 +57263,55 @@ STORY.onDay = function(day){
       if(!(typeof WILD!=="undefined" && WILD.copeDriveIn("Found that in the back o' the still. Figured yer swill could use help.",5000)))
         STORY.copperSay("Found that in the back o' the still. Figured yer swill could use help.",5000); });
   }
-  /* Fable pass: one line each time the mountain turns over */
-  if(typeof SEASONS!=="undefined" && day>1 && SEASONS.of(day)!==SEASONS.of(day-1))
-    STORY.at(5, ()=>toast(DATA.SEASON_TURN[SEASONS.of(G_STATE.day)],"gold",5000));
-  /* Fable pass: the morning after a legendary is born, he comes to look at you */
+  /* Fable pass: the morning after a legendary is born, he comes to look at
+     you. One-shot beats go through WILD.copeSay — a QUEUE — because
+     copeDriveIn returns false when the truck is already out, and the review
+     caught these unique lines being silently dropped on collision mornings
+     (legendMorn and the concession are strongly CORRELATED: the legendary IS
+     the great night that breaks the stand). */
   if(G_STATE.flags.newLegendDay===day-1){
     G_STATE.flags.newLegendDay=0;
-    STORY.at(rand(14,30), ()=>{ if(typeof WILD!=="undefined") WILD.copeDriveIn(pick(DATA.COPPERHEAD.legendMorn), 6000); });
+    STORY.at(rand(14,30), ()=>{ if(typeof WILD!=="undefined") WILD.copeSay(pick(DATA.COPPERHEAD.legendMorn), 6000); });
   }
-  /* sabotage era after rank 1 — ⚠️ the undercut PERSISTS until you break it
-     (great beer, see finishSleep); it used to clear itself silently every
-     morning, which is why the flag read as dead */
-  if(G_STATE.flags.undercut){
-    /* ⚠️ he is cheap, not tireless — an unbroken stand folds on its own after
-       three mornings, or the whole sabotage/drive-by flow behind it starves
-       (found by a 30-day soak: one early undercut blocked every raccoon for
-       the rest of the month). Breaking it with quality is still the GOOD exit:
-       fame +6 and a concession. Waiting him out earns nothing. */
-    G_STATE.flags.undercutDays=(G_STATE.flags.undercutDays||0)+1;
-    if(G_STATE.flags.undercutDays>=4){
-      G_STATE.flags.undercut=false; G_STATE.flags.undercutDays=0;
+  /* the rivalry's mornings — ONE chain, so states can't contradict:
+     concession day > active stand > new sabotage > ambient drive-by */
+  const RF=G_STATE.flags;
+  if(RF.undercutBrokeDay===day){
+    /* he concedes in person, and rolls NO new sabotage today — a fresh stand
+       rising while he says "stand's closed" was a real 17.5%-of-breaks
+       contradiction before this chain was unified */
+    RF.undercutBrokeDay=0;
+    STORY.at(rand(20,35), ()=>{ if(typeof WILD!=="undefined") WILD.copeSay(DATA.COPPERHEAD.undercutBroken, 5500); });
+  } else if(RF.undercut){
+    /* ⚠️ he is cheap, not tireless — an unbroken stand folds on the 4th
+       morning, or the sabotage flow behind it starves (30-day soak). Derived
+       from the day it was RAISED, never a counter: CYCLE.load re-emits newday
+       for the same day on every resume, and a counter folded the stand after
+       three browser refreshes without a single in-game day passing. */
+    if(day-(RF.undercutStart||day)>=4){
+      RF.undercut=false; RF.undercutStart=0;
       STORY.at(10,()=>{ toast("🪧 The stand's gone this morning. Nothing announced. Nothing explained.","",4000);
-        if(typeof WILD!=="undefined") STORY.at(8,()=>WILD.copeDriveIn("Stand's closed. Weren't the money. Got bored. …Weren't the money.",5000)); });
+        if(typeof WILD!=="undefined") STORY.at(8,()=>WILD.copeSay("Stand's closed. Weren't the money. Got bored. …Weren't the money.",5000)); });
     } else {
       STORY.at(8,()=>toast("🪧 Copperhead's stand is still up the road. Cheap travels — but word travels harder.","bad",4200));
     }
-  } else if(G_STATE.rank>=1 && day>2 && !G_STATE.flags["sab"+day] && Math.random()<0.35){
-    G_STATE.flags["sab"+day]=true;
+  } else if(G_STATE.rank>=1 && day>2 && !RF["sab"+day] && Math.random()<0.35){
+    RF["sab"+day]=true;
     if(Math.random()<0.5){
-      G_STATE.flags.sabRaccoon=true;
+      RF.sabRaccoon=true;
       STORY.at(rand(20,60),()=>STORY.copperSay(DATA.COPPERHEAD.raccoon,4000));
     } else {
-      G_STATE.flags.undercut=true;
+      RF.undercut=true; RF.undercutStart=day;
       STORY.at(8,()=>toast("🪧 "+DATA.COPPERHEAD.undercut,"bad",4500));
     }
   } else if(day>2 && Math.random()<0.22){
-    /* Fable pass: drive-by mornings — he watches, seasonally */
+    /* drive-by mornings — pool by SEASONS.of(day), NOT SEASONS.current:
+       STORY's newday handler runs before SEASONS', so .current is one season
+       stale on exactly the turn mornings */
     const P=DATA.COPPERHEAD.driveby;
-    const pool=(typeof SEASONS!=="undefined" && P[SEASONS.current] && Math.random()<0.6)
-      ? P[SEASONS.current] : P.any;
-    STORY.at(rand(15,45), ()=>{ if(typeof WILD!=="undefined") WILD.copeDriveIn(pick(pool), 5000); });
-  }
-  /* the morning after the stand broke, he concedes it — in person */
-  if(G_STATE.flags.undercutBrokeDay===day){
-    G_STATE.flags.undercutBrokeDay=0;
-    STORY.at(rand(20,35), ()=>{ if(typeof WILD!=="undefined") WILD.copeDriveIn(DATA.COPPERHEAD.undercutBroken, 5500); });
+    const seas=(typeof SEASONS!=="undefined")?SEASONS.of(day):null;
+    const pool=(seas && P[seas] && Math.random()<0.6) ? P[seas] : P.any;
+    STORY.at(rand(15,45), ()=>{ if(typeof WILD!=="undefined") WILD.copeSay(pick(pool), 5000); });
   }
   /* festival mornings (one at a time, biggest first) */
   for(const type of ["world","regional","fair"]){
@@ -57308,6 +57345,12 @@ STORY.onPhase = function(ph){
     /* leaf-day survival */
     if(G_STATE.leafDay && (G_STATE.tonight.served||0)>=8) G_STATE.flags.leafSurvived=true;
     WINGS.checkHatUnlocks();
+    /* ⚠️ stash the evening's great-pour count BEFORE the wipe — finishSleep
+       reads it for the undercut quality-break, and this wipe used to run
+       first whenever the player stayed up past last call (the break could
+       only ever fire for players who closed EARLY — inverted intent) */
+    G_STATE.flags.nightGood=Math.max(G_STATE.flags.nightGood||0,
+      (G_STATE.tonight&&G_STATE.tonight.good)||0);   // idempotent if night re-fires
     G_STATE.tonight={touristsSwilled:0,served:0,swill:0};
     PUB.lastCall();
   }
@@ -57436,8 +57479,17 @@ STORY.worldsFinale = function(){
   WINGS.checkHatUnlocks();
   /* Fable pass: the campaign's last scene happens ON YOUR PORCH, not from
      across the crick. He drives in one final time — no honk, for once — and
-     says the thing the whole game was for. Then the truth about the jar. */
-  const drove = (typeof WILD!=="undefined") && WILD.copeDriveIn(DATA.CH2.worldsWin, 7000, 17);
+     says the thing the whole game was for. Then the truth about the jar.
+     ⚠️ evict any ambient truck first: the old fallback attached the capstone
+     bubble to a Copperhead whose position the OTHER truck's state machine
+     still owned — it teleported him home mid-sentence, across the crick,
+     the exact bug this scene exists to fix. */
+  let drove=false;
+  if(typeof WILD!=="undefined"){
+    WILD.copeQueue.length=0;
+    if(WILD.copeTruck){ WORLD.scene.remove(WILD.copeTruck.g); WILD.copeTruck=null; if(STORY.copper) STORY.copper.busy=false; }
+    drove = WILD.copeDriveIn(DATA.CH2.worldsWin, 7000, 17);
+  }
   if(!drove) STORY.copperSay(DATA.CH2.worldsWin,7000);
   STORY.at(8.5,()=>STORY.copperSay("That jar I left, first week? Weren't no charity. That was my best batch. Wanted to see what you'd DO with it.",7500));
   STORY.at(16,()=>toast(DATA.CH2.epilogue,"gold",7000));
@@ -57470,8 +57522,12 @@ const CYCLE = {
 const PHASE_LIGHT = {
   morning:  { sun:[24,20,12], sunI:1.5, sunC:0xffe8c0, hemi:0.75, bg:0x9db8c8, fogN:55, fogF:150, pts:0, fire:0, star:0 },
   afternoon:{ sun:[8,34,6],   sunI:1.7, sunC:0xfff2d8, hemi:0.8,  bg:0xa4c2d4, fogN:60, fogF:160, pts:0, fire:0, star:0 },
-  evening:  { sun:[-26,9,10], sunI:1.05,sunC:0xffb070, hemi:0.5,  bg:0xd28a5e, fogN:45, fogF:130, pts:1.9, fire:0.45, star:0.15 },
-  night:    { sun:[-10,22,-12],sunI:0.26,sunC:0x8a9ad8, hemi:0.34, bg:0x141e2a, fogN:30, fogF:110, pts:3.4, fire:0.9, star:0.95 },
+  /* ⚠️ visual pass, MEASURED not eyeballed: evening (the phase the whole game
+     happens in) read 0.166 mean luma — early-night dark — and night crushed
+     30% of pixels below 0.05. Lifted to evening ≈0.22 / night ≈0.12 while
+     keeping the amber warmth (sat stays ~0.65+). Re-measure before retuning. */
+  evening:  { sun:[-26,11,10], sunI:1.48,sunC:0xffb878, hemi:0.68, bg:0xd28a5e, fogN:48, fogF:135, pts:2.2, fire:0.45, star:0.15 },
+  night:    { sun:[-10,22,-12],sunI:0.42,sunC:0x93a3de, hemi:0.54, bg:0x1a2534, fogN:32, fogF:112, pts:4.3, fire:0.9, star:0.95 },
 };
 
 CYCLE.setup = function(){
@@ -57611,12 +57667,19 @@ CYCLE.tallyLines = function(){
 
 CYCLE.finishSleep = function(){
   /* Fable pass: the undercut war resolves on QUALITY, not price — pour a great
-     night while his stand is up and word beats cheap */
+     night while his stand is up and word beats cheap.
+     ⚠️ tonight has per-NIGHT semantics that this function must enforce: the
+     evening→night flip stashes good into flags.nightGood before wiping, and
+     sleeping DURING evening skips that wipe entirely — so read the max of
+     both and zero both, or the count either reads 0 after a stellar night or
+     accumulates across days (1 pint/night × 4 nights falsely broke the stand). */
   let underLine=null;
+  const goodNight=Math.max(G_STATE.tonight.good||0, G_STATE.flags.nightGood||0);
+  G_STATE.flags.nightGood=0; G_STATE.tonight.good=0;
   if(G_STATE.flags.undercut){
-    if((G_STATE.tonight.good||0)>=4){
-      G_STATE.flags.undercut=false;
-      G_STATE.flags.undercutBrokeDay=G_STATE.day+1; G_STATE.flags.undercutDays=0;
+    if(goodNight>=4){
+      G_STATE.flags.undercut=false; G_STATE.flags.undercutStart=0;
+      G_STATE.flags.undercutBrokeDay=G_STATE.day+1;
       STORY.fame(6,"word beats cheap");
       underLine="🪧 Copperhead's stand came DOWN overnight. Cheap don't survive a room full of great beer.";
     }
@@ -58561,6 +58624,7 @@ MAIN.tick = function(dt, skipRender){
   if(typeof SEASONS!=="undefined") SEASONS.update(dt);
   if(typeof TIPS!=="undefined") TIPS.update(dt);
   if(typeof WILD!=="undefined") WILD.update(dt);
+  if(typeof REGULARS!=="undefined") REGULARS.update(dt);
   UI.update(dt);
 
   if(MAIN.mode==="walk"||MAIN.mode==="fork") MAIN.scanInteract();
@@ -60915,10 +60979,12 @@ SEASONS.applySeason = function(season, instant){
   SEASONS.lerpT=instant?1:0;
   if(instant){ col.array.set(SEASONS.target); col.needsUpdate=true; }
   if(SEASONS._init && !instant){
-    const M={ winter:"❄️ FIRST FROST — winter's set in. Fires run hungry, folks drink close to home.",
-      spring:"🌸 THAW! Spring's on the mountain — peepers out, storms brewin'.",
-      summer:"☀️ Summer's here — thirsty season on the porch.",
-      fall:"🍁 Leaves are turnin' — fall's back. Leaf-peepers soon." };
+    /* the ONE season-turn announcement (a Fable-pass duplicate in STORY.onDay
+       used to fire a second toast 2.5s after this one) */
+    const M={ winter:"❄️ Frost on the kettle. Winter's here — the mountain keeps what it grows now.",
+      spring:"🌱 The crick's runnin' loud again. Spring's on the mountain — peepers out, storms brewin'.",
+      summer:"☀️ The haze settled in overnight. Summer's here — tourists follow the warmth.",
+      fall:"🍁 First red leaf on the porch this morning. Fall's coming down the ridge — leaf-peepers soon." };
     setTimeout(()=>toast(M[season],"gold",4600),2400);
   }
   /* winter-brewing brag bookkeeping */
@@ -61435,12 +61501,31 @@ WILD.dotUpdate = function(dt){
 };
 
 /* ---------- COPPERHEAD, IN YOUR YARD ---------- */
+/* one-shot story beats queue here — copeDriveIn returns false when the truck
+   is already out, and unique lines (the concession, the legendary reaction)
+   were being silently dropped on collision mornings. The queue drains as the
+   truck frees up; nothing is ever lost. */
+WILD.copeQueue=[];
+WILD.copeSay = function(line, ms, hold){
+  WILD.copeQueue.push({line, ms, hold});
+};
 WILD.copeDriveIn = function(line, ms, hold){
   if(WILD.copeTruck) return false;
   const g=(typeof mkPickup==="function")?mkPickup():null;
   if(!g) return false;
   g.position.set(-70, WORLD.getH(0,27), 26.6);
   g.rotation.y=Math.PI/2;
+  /* visual pass: headlights after dark — evening drive-ins glow up the road */
+  if(CYCLE.phase==="evening"||CYCLE.phase==="night"){
+    /* cached geo+mat — per-spawn allocations are the leak class M6 removed */
+    WILD._lampGeo=WILD._lampGeo||new THREE.SphereGeometry(0.09,8,6);
+    WILD._lampMat=WILD._lampMat||new THREE.MeshBasicMaterial({color:0xffe8b0});
+    const mkLamp=(z)=>{ const l=new THREE.Mesh(WILD._lampGeo, WILD._lampMat);
+      l.position.set(1.55,0.62,z); return l; };
+    g.add(mkLamp(0.45), mkLamp(-0.45));
+    const beam=new THREE.PointLight(0xffd98a, 1.3, 9, 2);
+    beam.position.set(2.2,0.7,0); g.add(beam);
+  }
   WILD.copeTruck={ g, t:0, phase:"in", line, ms:ms||5000, hold:hold||0 };
   return true;
 };
@@ -61483,8 +61568,11 @@ WILD.update = function(dt){
   WILD.dotUpdate(dt);
   WILD.copeUpdate(dt);
   WILD.coonUpdate(dt);
+  if(!WILD.copeTruck && WILD.copeQueue.length && CYCLE.phase!=="night"){
+    const q=WILD.copeQueue.shift();
+    WILD.copeDriveIn(q.line, q.ms, q.hold);
+  }
   if(WILD.sign) WILD.sign.visible=!!G_STATE.flags.undercut;
-  if(typeof REGULARS!=="undefined") REGULARS.update(dt);
   /* M5: the camera pulls back as the empire grows — bible §4 and §18 both
      promise this as the "one mountain, deepening" payoff, and camDist was
      written in exactly ONE place: the mouse wheel. */
@@ -61569,7 +61657,7 @@ WORLD.addStation({ id:"coon",
     MAIN.player.squash=0.25;
     toast("🦝 Shooed it clear off the property. It left with most of its dignity.","",3000);
     STORY.fame(1,"varmint patrol");
-    if(Math.random()<0.5) STORY.at(rand(20,40), ()=>WILD.copeDriveIn(DATA.COPPERHEAD.coonShooed, 4200));
+    if(Math.random()<0.5) STORY.at(rand(20,40), ()=>WILD.copeSay(DATA.COPPERHEAD.coonShooed, 4200));
   }
 });
 
@@ -61670,6 +61758,19 @@ REGULARS.claim = function(c){
     else line=pick(r.greets);
   }
   if(line) setTimeout(()=>{ if(!c.dead) UI.bubbleRig(rig, `<span class="who">${r.name} · ${r.who}</span>“${line}”`, hold); }, rand(1200,2600));
+  /* ⚠️ their ambient chat must be re-emitted HERE: spawnCustomer's own 50%
+     chat timer captured the OLD rig, which the swap orphans — UI.update culls
+     bubbles on unparented rigs, so without this the six ROSTER chat arrays
+     were unreachable content (review finding) */
+  if(Math.random()<0.6) setTimeout(()=>{ if(!c.dead) UI.bubbleRig(c.rig, pick(r.chat), 2400); }, rand(7000,12000));
+  /* visual pass: Odell's stray pup, once he admits he's feeding her — she
+     trots in with him and waits, tail going, wherever he settles */
+  if(r.key==="odell" && s.beat>=2 && !REGULARS.pup && typeof makePup==="function"){
+    const pg=makePup();
+    pg.position.set(rig.x-1, rig.y, rig.z-1);
+    WORLD.scene.add(pg);
+    REGULARS.pup={ g:pg, owner:c, ph:rand(10) };
+  }
   /* the USUAL: once known, seeing it on tap matters */
   if(s.fav){
     c.regularFav=s.fav;
@@ -61707,15 +61808,48 @@ REGULARS.onDrink = function(c, beer){
 /* ---------- June's fiddle — the room holds still for it ---------- */
 REGULARS.startFiddle = function(c){
   REGULARS.fiddle={t:16, c, note:0};
+  /* visual pass: the fiddle is a THING now, tucked at her chin */
+  if(typeof makeFiddle==="function" && c.rig){
+    const f=makeFiddle();
+    f.position.set(-0.28,1.62,0.3); f.rotation.set(-0.5,0.7,-0.35);
+    c.rig.group.add(f);
+    REGULARS.fiddle.prop=f;
+  }
   toast("🎻 June's got the fiddle out. Nobody's leaving yet.","gold",3600);
   for(const o of PUB.customers){ if(!o.dead && o.state!=="leave" && o.state!=="road") o.patience=Math.max(o.patience,14); }
   STORY.fame(2,"June played");
 };
 REGULARS.update = function(dt){
+  /* Odell's pup trots after him, sits when he does */
+  const P=REGULARS.pup;
+  if(P){
+    const o=P.owner;
+    if(!o || o.dead){ WORLD.scene.remove(P.g); REGULARS.pup=null; }
+    else{
+      const r=o.rig, tx=r.x-Math.sin(r.facing)*1.1-0.4, tz=r.z-Math.cos(r.facing)*1.1;
+      const dx=tx-P.g.position.x, dz=tz-P.g.position.z, d=Math.hypot(dx,dz);
+      if(d>0.35){
+        P.g.position.x+=dx/d*Math.min(d,2.2)*dt*1.6; P.g.position.z+=dz/d*Math.min(d,2.2)*dt*1.6;
+        P.g.rotation.y=Math.atan2(dx,dz);
+        P.g.position.y=WORLD.getH(P.g.position.x,P.g.position.z)+Math.abs(Math.sin(CLAY.t*10+P.ph))*0.05;
+      } else P.g.position.y=WORLD.getH(P.g.position.x,P.g.position.z);
+      if(P.g.userData.tail) P.g.userData.tail.rotation.z=Math.sin(CLAY.t*9+P.ph)*0.5;   // always going
+    }
+  }
   const F=REGULARS.fiddle; if(!F) return;
   F.t-=dt;
   const r=F.c && !F.c.dead ? F.c.rig : null;
-  if(!r || F.t<=0){ REGULARS.fiddle=null; return; }
+  if(!r || F.t<=0){
+    if(F.prop && F.prop.parent) F.prop.parent.remove(F.prop);
+    if(r) r.group.rotation.z=0;                  // stop the sway where it stood
+    REGULARS.fiddle=null; return;
+  }
+  /* she sways with it; the bow rocks against the strings */
+  if(F.prop){
+    F.prop.rotation.z=-0.35+Math.sin(CLAY.t*5)*0.08;
+    if(F.prop.userData.bow) F.prop.userData.bow.rotation.x=Math.sin(CLAY.t*7)*0.35;
+  }
+  r.group.rotation.z=Math.sin(CLAY.t*2.4)*0.04;
   F.note-=dt;
   if(F.note<=0){ F.note=0.45+Math.random()*0.35;
     SFX.play(Math.random()<0.7?"ding":"blip", r.x, r.z);

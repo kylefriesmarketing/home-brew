@@ -329,13 +329,7 @@ DATA.COPPERHEAD = {
   undercutBroken:"Fine. FINE. Stand's closed. Can't compete with whatever witchcraft yer kettle's doin'.",
   coonShooed:"…that raccoon don't work for me. Officially.",
 };
-/* one line each time the mountain turns over */
-DATA.SEASON_TURN = {
-  spring:"🌱 The crick's runnin' loud again. Spring's on the mountain.",
-  summer:"☀️ The haze settled in overnight. Summer's here — tourists follow the warmth.",
-  fall:"🍁 First red leaf on the porch this morning. Fall's coming down the ridge.",
-  winter:"❄️ Frost on the kettle. Winter's here — the mountain keeps what it grows now.",
-};
+/* (season-turn lines live in SEASONS.applySeason — the ONE announcement site) */
 DATA.JOE_LINES = [
   "…yer floors talk at night. I like that.",
   "brewed anything WRONG lately? I pay for wrong.",

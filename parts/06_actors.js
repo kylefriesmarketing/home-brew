@@ -35,6 +35,15 @@ function makePerson(opt={}){
   const nose=claySphere(0.11,skin,0.14,310); nose.position.set(0,-0.02,0.4); head.add(nose);
   const eyes=makeEyes(0.1,0.16); eyes.position.set(0,0.1,0.32); head.add(eyes);
   g.add(head);
+  /* armature seams — the M1 leftover: real claymation figures show a faint
+     crease where separately-moulded parts meet the armature. Thin darkened
+     rings at the neck and shoulder joins; subtle (scale of a fingernail),
+     they read as build lines, not jewellery. */
+  const seamC=new THREE.Color(shirt).multiplyScalar(0.62).getHex();
+  const neckSeam=clayCyl(0.21,0.21,0.07,seamC,0.03,331); neckSeam.position.y=1.62; g.add(neckSeam);
+  const shSeamL=clayCyl(0.135,0.135,0.05,seamC,0.03,332);
+  shSeamL.rotation.z=Math.PI/2; shSeamL.position.set(-0.46,1.35,0); g.add(shSeamL);
+  const shSeamR=shSeamL.clone(); shSeamR.position.x=0.46; g.add(shSeamR);
 
   let hat=null;
   const hats={
@@ -235,4 +244,31 @@ function makeCustomer(type){
   const rig=makePerson(Object.assign({size:rand(0.88,1.08)}, look));
   rig.ctype=type;
   return rig;
+}
+
+/* the stray pup that adopts Odell (visual pass — appears after his second
+   story beat, "…I'm feedin' her a little") */
+function makePup(){
+  const g=new THREE.Group();
+  const body=clayCapsule(0.13,0.22,0xb08a5a,0.1,371); body.rotation.z=Math.PI/2; body.position.y=0.18; g.add(body);
+  const head=claySphere(0.12,0xb08a5a,0.1,372); head.position.set(0,0.3,0.2); g.add(head);
+  const snout=claySphere(0.06,0x8a6a42,0.12,373); snout.position.set(0,0.27,0.3); g.add(snout);
+  const earL=claySphere(0.05,0x8a6a42,0.1,374); earL.position.set(-0.08,0.4,0.16); earL.scale.y=1.6; g.add(earL);
+  const earR=earL.clone(); earR.position.x=0.08; g.add(earR);
+  const tail=clayCapsule(0.04,0.14,0xb08a5a,0.12,375); tail.position.set(0,0.26,-0.24); tail.rotation.x=0.9; g.add(tail);
+  g.userData.tail=tail;
+  g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
+  return g;
+}
+
+/* June's fiddle (visual pass — she says she plays; now you can SEE it) */
+function makeFiddle(){
+  const g=new THREE.Group();
+  const body=clayBox(0.16,0.05,0.26,0x8a4a2a,0.06,381); g.add(body);
+  const waist=clayBox(0.11,0.06,0.08,0x8a4a2a,0.06,382); waist.position.z=0.02; g.add(waist);
+  const neck=clayBox(0.035,0.04,0.3,0x5e3a22,0.04,383); neck.position.z=0.26; g.add(neck);
+  const scroll=claySphere(0.035,0x5e3a22,0.06,384); scroll.position.z=0.42; g.add(scroll);
+  const bow=clayBox(0.02,0.02,0.42,0xd8c8a0,0.03,385); bow.position.set(0.1,0.06,0.05); bow.rotation.y=0.5;
+  g.add(bow); g.userData.bow=bow;
+  return g;
 }

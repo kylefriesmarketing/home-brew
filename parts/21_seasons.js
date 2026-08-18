@@ -86,10 +86,12 @@ SEASONS.applySeason = function(season, instant){
   SEASONS.lerpT=instant?1:0;
   if(instant){ col.array.set(SEASONS.target); col.needsUpdate=true; }
   if(SEASONS._init && !instant){
-    const M={ winter:"❄️ FIRST FROST — winter's set in. Fires run hungry, folks drink close to home.",
-      spring:"🌸 THAW! Spring's on the mountain — peepers out, storms brewin'.",
-      summer:"☀️ Summer's here — thirsty season on the porch.",
-      fall:"🍁 Leaves are turnin' — fall's back. Leaf-peepers soon." };
+    /* the ONE season-turn announcement (a Fable-pass duplicate in STORY.onDay
+       used to fire a second toast 2.5s after this one) */
+    const M={ winter:"❄️ Frost on the kettle. Winter's here — the mountain keeps what it grows now.",
+      spring:"🌱 The crick's runnin' loud again. Spring's on the mountain — peepers out, storms brewin'.",
+      summer:"☀️ The haze settled in overnight. Summer's here — tourists follow the warmth.",
+      fall:"🍁 First red leaf on the porch this morning. Fall's coming down the ridge — leaf-peepers soon." };
     setTimeout(()=>toast(M[season],"gold",4600),2400);
   }
   /* winter-brewing brag bookkeeping */

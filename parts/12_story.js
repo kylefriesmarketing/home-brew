@@ -110,51 +110,55 @@ STORY.onDay = function(day){
       if(!(typeof WILD!=="undefined" && WILD.copeDriveIn("Found that in the back o' the still. Figured yer swill could use help.",5000)))
         STORY.copperSay("Found that in the back o' the still. Figured yer swill could use help.",5000); });
   }
-  /* Fable pass: one line each time the mountain turns over */
-  if(typeof SEASONS!=="undefined" && day>1 && SEASONS.of(day)!==SEASONS.of(day-1))
-    STORY.at(5, ()=>toast(DATA.SEASON_TURN[SEASONS.of(G_STATE.day)],"gold",5000));
-  /* Fable pass: the morning after a legendary is born, he comes to look at you */
+  /* Fable pass: the morning after a legendary is born, he comes to look at
+     you. One-shot beats go through WILD.copeSay — a QUEUE — because
+     copeDriveIn returns false when the truck is already out, and the review
+     caught these unique lines being silently dropped on collision mornings
+     (legendMorn and the concession are strongly CORRELATED: the legendary IS
+     the great night that breaks the stand). */
   if(G_STATE.flags.newLegendDay===day-1){
     G_STATE.flags.newLegendDay=0;
-    STORY.at(rand(14,30), ()=>{ if(typeof WILD!=="undefined") WILD.copeDriveIn(pick(DATA.COPPERHEAD.legendMorn), 6000); });
+    STORY.at(rand(14,30), ()=>{ if(typeof WILD!=="undefined") WILD.copeSay(pick(DATA.COPPERHEAD.legendMorn), 6000); });
   }
-  /* sabotage era after rank 1 — ⚠️ the undercut PERSISTS until you break it
-     (great beer, see finishSleep); it used to clear itself silently every
-     morning, which is why the flag read as dead */
-  if(G_STATE.flags.undercut){
-    /* ⚠️ he is cheap, not tireless — an unbroken stand folds on its own after
-       three mornings, or the whole sabotage/drive-by flow behind it starves
-       (found by a 30-day soak: one early undercut blocked every raccoon for
-       the rest of the month). Breaking it with quality is still the GOOD exit:
-       fame +6 and a concession. Waiting him out earns nothing. */
-    G_STATE.flags.undercutDays=(G_STATE.flags.undercutDays||0)+1;
-    if(G_STATE.flags.undercutDays>=4){
-      G_STATE.flags.undercut=false; G_STATE.flags.undercutDays=0;
+  /* the rivalry's mornings — ONE chain, so states can't contradict:
+     concession day > active stand > new sabotage > ambient drive-by */
+  const RF=G_STATE.flags;
+  if(RF.undercutBrokeDay===day){
+    /* he concedes in person, and rolls NO new sabotage today — a fresh stand
+       rising while he says "stand's closed" was a real 17.5%-of-breaks
+       contradiction before this chain was unified */
+    RF.undercutBrokeDay=0;
+    STORY.at(rand(20,35), ()=>{ if(typeof WILD!=="undefined") WILD.copeSay(DATA.COPPERHEAD.undercutBroken, 5500); });
+  } else if(RF.undercut){
+    /* ⚠️ he is cheap, not tireless — an unbroken stand folds on the 4th
+       morning, or the sabotage flow behind it starves (30-day soak). Derived
+       from the day it was RAISED, never a counter: CYCLE.load re-emits newday
+       for the same day on every resume, and a counter folded the stand after
+       three browser refreshes without a single in-game day passing. */
+    if(day-(RF.undercutStart||day)>=4){
+      RF.undercut=false; RF.undercutStart=0;
       STORY.at(10,()=>{ toast("🪧 The stand's gone this morning. Nothing announced. Nothing explained.","",4000);
-        if(typeof WILD!=="undefined") STORY.at(8,()=>WILD.copeDriveIn("Stand's closed. Weren't the money. Got bored. …Weren't the money.",5000)); });
+        if(typeof WILD!=="undefined") STORY.at(8,()=>WILD.copeSay("Stand's closed. Weren't the money. Got bored. …Weren't the money.",5000)); });
     } else {
       STORY.at(8,()=>toast("🪧 Copperhead's stand is still up the road. Cheap travels — but word travels harder.","bad",4200));
     }
-  } else if(G_STATE.rank>=1 && day>2 && !G_STATE.flags["sab"+day] && Math.random()<0.35){
-    G_STATE.flags["sab"+day]=true;
+  } else if(G_STATE.rank>=1 && day>2 && !RF["sab"+day] && Math.random()<0.35){
+    RF["sab"+day]=true;
     if(Math.random()<0.5){
-      G_STATE.flags.sabRaccoon=true;
+      RF.sabRaccoon=true;
       STORY.at(rand(20,60),()=>STORY.copperSay(DATA.COPPERHEAD.raccoon,4000));
     } else {
-      G_STATE.flags.undercut=true;
+      RF.undercut=true; RF.undercutStart=day;
       STORY.at(8,()=>toast("🪧 "+DATA.COPPERHEAD.undercut,"bad",4500));
     }
   } else if(day>2 && Math.random()<0.22){
-    /* Fable pass: drive-by mornings — he watches, seasonally */
+    /* drive-by mornings — pool by SEASONS.of(day), NOT SEASONS.current:
+       STORY's newday handler runs before SEASONS', so .current is one season
+       stale on exactly the turn mornings */
     const P=DATA.COPPERHEAD.driveby;
-    const pool=(typeof SEASONS!=="undefined" && P[SEASONS.current] && Math.random()<0.6)
-      ? P[SEASONS.current] : P.any;
-    STORY.at(rand(15,45), ()=>{ if(typeof WILD!=="undefined") WILD.copeDriveIn(pick(pool), 5000); });
-  }
-  /* the morning after the stand broke, he concedes it — in person */
-  if(G_STATE.flags.undercutBrokeDay===day){
-    G_STATE.flags.undercutBrokeDay=0;
-    STORY.at(rand(20,35), ()=>{ if(typeof WILD!=="undefined") WILD.copeDriveIn(DATA.COPPERHEAD.undercutBroken, 5500); });
+    const seas=(typeof SEASONS!=="undefined")?SEASONS.of(day):null;
+    const pool=(seas && P[seas] && Math.random()<0.6) ? P[seas] : P.any;
+    STORY.at(rand(15,45), ()=>{ if(typeof WILD!=="undefined") WILD.copeSay(pick(pool), 5000); });
   }
   /* festival mornings (one at a time, biggest first) */
   for(const type of ["world","regional","fair"]){
@@ -188,6 +192,12 @@ STORY.onPhase = function(ph){
     /* leaf-day survival */
     if(G_STATE.leafDay && (G_STATE.tonight.served||0)>=8) G_STATE.flags.leafSurvived=true;
     WINGS.checkHatUnlocks();
+    /* ⚠️ stash the evening's great-pour count BEFORE the wipe — finishSleep
+       reads it for the undercut quality-break, and this wipe used to run
+       first whenever the player stayed up past last call (the break could
+       only ever fire for players who closed EARLY — inverted intent) */
+    G_STATE.flags.nightGood=Math.max(G_STATE.flags.nightGood||0,
+      (G_STATE.tonight&&G_STATE.tonight.good)||0);   // idempotent if night re-fires
     G_STATE.tonight={touristsSwilled:0,served:0,swill:0};
     PUB.lastCall();
   }
@@ -316,8 +326,17 @@ STORY.worldsFinale = function(){
   WINGS.checkHatUnlocks();
   /* Fable pass: the campaign's last scene happens ON YOUR PORCH, not from
      across the crick. He drives in one final time — no honk, for once — and
-     says the thing the whole game was for. Then the truth about the jar. */
-  const drove = (typeof WILD!=="undefined") && WILD.copeDriveIn(DATA.CH2.worldsWin, 7000, 17);
+     says the thing the whole game was for. Then the truth about the jar.
+     ⚠️ evict any ambient truck first: the old fallback attached the capstone
+     bubble to a Copperhead whose position the OTHER truck's state machine
+     still owned — it teleported him home mid-sentence, across the crick,
+     the exact bug this scene exists to fix. */
+  let drove=false;
+  if(typeof WILD!=="undefined"){
+    WILD.copeQueue.length=0;
+    if(WILD.copeTruck){ WORLD.scene.remove(WILD.copeTruck.g); WILD.copeTruck=null; if(STORY.copper) STORY.copper.busy=false; }
+    drove = WILD.copeDriveIn(DATA.CH2.worldsWin, 7000, 17);
+  }
   if(!drove) STORY.copperSay(DATA.CH2.worldsWin,7000);
   STORY.at(8.5,()=>STORY.copperSay("That jar I left, first week? Weren't no charity. That was my best batch. Wanted to see what you'd DO with it.",7500));
   STORY.at(16,()=>toast(DATA.CH2.epilogue,"gold",7000));

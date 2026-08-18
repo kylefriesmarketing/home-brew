@@ -1,9 +1,69 @@
-# HOME BREW — dev notes (v2.1 — the Fable pass)
+# HOME BREW — dev notes (v2.2 — the check & the visual pass)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v2.2 — **THE CHECK + THE VISUAL PASS**
+
+An 8-angle review of the v2.1 diff found 10 real defects (all fixed, all
+re-verified), then a measured visual pass.
+
+**The check — what the review caught:**
+- 🚨 **The undercut quality-break was dead in normal play.** `tonight` is wiped
+  by the evening→night transition BEFORE the player can reach the bed (sleep is
+  only allowed evening/night), so `tonight.good` read 0 after every full
+  evening — the break only fired for players who closed EARLY. And sleeping
+  during evening skipped the wipe, accumulating pours across days (1/night ×4
+  = false break). Fixed: the wipe stashes into `flags.nightGood` (idempotent),
+  finishSleep reads the max and zeroes both. Measured: 8 breaks in a 30-day
+  soak where the old code produced 0.
+- 🔁 **The fold counter advanced on every save reload** — CYCLE.load re-emits
+  newday for the CURRENT day, and `undercutDays++` wasn't idempotent: 3 browser
+  refreshes folded the stand without a day passing. Fixed by DERIVING from
+  `undercutStart` (the day it was raised) — pure, reload-proof.
+  ⚠️ **rule: onDay re-runs on every resume; anything stateful inside it must be
+  derived or day-stamped, never counted.**
+- 📭 **One-shot story lines could be silently lost forever** — beats cleared
+  their flag before the delayed callback, and `copeDriveIn` returns false when
+  the truck's already out; legendMorn + the concession are strongly correlated
+  (the legendary IS the great night). Fixed with `WILD.copeSay` — a queue that
+  drains as the truck frees up. Nothing is ever dropped.
+- 🤝 **A new stand could rise the same morning he concedes the old one**
+  (17.5% of breaks) — the morning chain is now ONE if/else: concession day >
+  active stand > new sabotage > drive-by. Measured: 0/200 rearms.
+- 🏁 **The finale could still play from across the crick** — if an ambient
+  truck was out at the win, the fallback bubbled on a Copperhead the OTHER
+  truck's state machine teleports home mid-sentence. worldsFinale now evicts
+  any active truck + clears the queue first.
+- 🗣️ **The regulars' chat arrays were unreachable** — spawnCustomer's chat
+  timer captured the pre-swap rig; the bubble was culled in one frame, every
+  time. claim() now re-emits their ambient line on the live rig.
+- 🦝 **Two raccoons** — a boil started mid-walk spawned the roof prop while
+  the walker was still crossing the yard. startBoil now evicts the walker
+  (it "became" the roof raccoon).
+- Plus: the double season-turn toast (one announcement site now, in
+  `applySeason`), the drive-by pool reading YESTERDAY's season on turn
+  mornings (handler order — use `SEASONS.of(day)`), and the spawn mix unified
+  into one weights table (README's 26% corrected to the true 24%).
+
+**The visual pass — measured, not eyeballed** (mean luma of a fixed yard
+framing, 100×56 downsample):
+| phase | was | now | note |
+|---|---|---|---|
+| evening | 0.166 / 8.9% crushed | **0.211** / 4% | the phase the game HAPPENS in read as early night |
+| night | 0.085 / **29.9% crushed** | **0.131** / 19.1% | a third of the screen was pure black |
+
+- 🧱 **Armature seams** (the M1 leftover): thin darkened rings at the neck and
+  shoulder joins on every clay person — build lines, not jewellery.
+- 🎻 **June's fiddle is a THING** — body, neck, scroll and a rocking bow at
+  her chin while she plays; she sways with it.
+- 🐕 **Odell's pup exists** — after his second beat ("…I'm feedin' her a
+  little") a small clay stray trots in with him, follows at heel, tail always
+  going.
+- 🚗 **Headlights** — evening/night drive-ins carry two lamps + a warm beam
+  (geo/material cached — no per-spawn allocations, the M6 rule).
 
 ## New in v2.1 — **THE FABLE PASS** (`25_regulars.js`) — the game gets a memory
 
@@ -27,7 +87,7 @@ The milestones fixed the machine. This pass is about the people.
   day, only when the beer earned it.
 - 🪧 **THE UNDERCUT WAR IS REAL** — `flags.undercut` was set, toasted, and
   read by NOBODY. Now: a painted "$2" road sign appears, tourists get skimmed
-  (26%→10% of arrivals) and arrive pre-watered (wallet ×0.7, $22.5→$15.5
+  (24%→10% of arrivals) and arrive pre-watered (wallet ×0.7, $22.5→$15.5
   measured). **It resolves on QUALITY, not price**: 4+ great/legendary pints
   in an evening breaks the stand overnight (+6 fame, he drives in to concede).
   ⚠️ **He is cheap, not tireless** — an unbroken stand folds by itself after 3
