@@ -117,13 +117,13 @@ WILD.dotUpdate = function(dt){
 };
 
 /* ---------- COPPERHEAD, IN YOUR YARD ---------- */
-WILD.copeDriveIn = function(line, ms){
+WILD.copeDriveIn = function(line, ms, hold){
   if(WILD.copeTruck) return false;
   const g=(typeof mkPickup==="function")?mkPickup():null;
   if(!g) return false;
   g.position.set(-70, WORLD.getH(0,27), 26.6);
   g.rotation.y=Math.PI/2;
-  WILD.copeTruck={ g, t:0, phase:"in", line, ms:ms||5000 };
+  WILD.copeTruck={ g, t:0, phase:"in", line, ms:ms||5000, hold:hold||0 };
   return true;
 };
 WILD.copeUpdate = function(dt){
@@ -143,7 +143,7 @@ WILD.copeUpdate = function(dt){
     }
   } else if(T.phase==="talk"){
     if(C){ C.speedNow=0; animatePerson(C,dt); }
-    if(T.t> (T.ms/1000)+1.2){ T.phase="out"; T.t=0; if(C) C.busy=false; }
+    if(T.t> Math.max((T.ms/1000)+1.2, T.hold)){ T.phase="out"; T.t=0; if(C) C.busy=false; }
   } else {
     T.g.position.x=lerp(6, 72, Math.min(1,T.t/3.6));
     for(const w of T.g.userData.wheels) w.rotation.x+=dt*8;
@@ -156,6 +156,7 @@ WILD.copeUpdate = function(dt){
 WILD.setup = function(){
   WILD.buildForage();
   WILD.buildDot();
+  WILD.buildSign();
   BUS.on("newday", ()=>{ WILD.dayReset(); });
   BUS.on("phase", ()=>{ for(const p of WILD.patches) WILD.refreshPatch(p); });
 };
@@ -163,9 +164,93 @@ WILD.update = function(dt){
   if(!G_STATE) return;
   WILD.dotUpdate(dt);
   WILD.copeUpdate(dt);
+  WILD.coonUpdate(dt);
+  if(WILD.sign) WILD.sign.visible=!!G_STATE.flags.undercut;
+  if(typeof REGULARS!=="undefined") REGULARS.update(dt);
   /* M5: the camera pulls back as the empire grows — bible §4 and §18 both
      promise this as the "one mountain, deepening" payoff, and camDist was
      written in exactly ONE place: the mouse wheel. */
   const rank=G_STATE.rank||0;
   MAIN.camMax = 24 + rank*3.5;
 };
+
+/* ---------- Fable pass: the undercut war made visible ---------- */
+WILD.buildSign = function(){
+  const g=new THREE.Group();
+  const post=clayCyl(0.07,0.07,1.5,0x6a4a30); post.position.y=0.75; g.add(post);
+  const board=clayBox(1.5,0.7,0.09,0xe8d9a8,0.2); board.position.y=1.5; g.add(board);
+  const trim=clayBox(1.56,0.1,0.1,0xb5472e,0.2); trim.position.y=1.88; g.add(trim);
+  /* a crude painted "$2" — two strokes, mountain signage at its finest */
+  const s1=clayBox(0.1,0.42,0.1,0xb5472e,0.2); s1.position.set(-0.25,1.5,0.03); s1.rotation.z=0.2; g.add(s1);
+  const s2=clayBox(0.34,0.1,0.1,0xb5472e,0.2); s2.position.set(0.18,1.42,0.03); g.add(s2);
+  const s3=clayBox(0.34,0.1,0.1,0xb5472e,0.2); s3.position.set(0.18,1.62,0.03); g.add(s3);
+  g.position.set(-9.5, WORLD.getH(-9.5,27.2), 27.2);
+  g.rotation.y=0.25; g.visible=false;
+  WORLD.scene.add(g);
+  WILD.sign=g;
+};
+
+/* ---------- Fable pass: the raccoon has a body now ---------- */
+WILD.coonUpdate = function(dt){
+  const F=G_STATE.flags;
+  /* spawn: on a sabotage morning the varmint walks IN, visibly, and can be
+     caught before it ever reaches your roof */
+  if(F.sabRaccoon && !WILD.coon && F.coonDay!==G_STATE.day
+     && (CYCLE.phase==="morning"||CYCLE.phase==="afternoon")){
+    F.coonDay=G_STATE.day;
+    const g=makeRaccoon();
+    g.position.set(-30, WORLD.getH(-30,-16), -16);
+    WORLD.scene.add(g);
+    WILD.coon={g, phase:"trot", t:0};
+    toast("🦝 Something's slinking toward the kettle…","bad",3200);
+  }
+  const C=WILD.coon; if(!C) return;
+  C.t+=dt;
+  const K=WORLD.anchors.kettle;
+  if(C.phase==="trot"){
+    /* ⚠️ it climbs the OUTSIDE wall — aiming straight at the kettle walked it
+       through the shack geometry, which a screenshot caught immediately */
+    const tx=K.x+0.9, tz=K.z-2.4;
+    const dx=tx-C.g.position.x, dz=tz-C.g.position.z, d=Math.hypot(dx,dz);
+    if(d<3.4){ C.phase="climb"; C.t=0; }
+    else{
+      C.g.position.x+=dx/d*1.5*dt; C.g.position.z+=dz/d*1.5*dt;
+      C.g.position.y=WORLD.getH(C.g.position.x,C.g.position.z)+0.25+Math.abs(Math.sin(C.t*9))*0.06;
+      C.g.rotation.y=Math.atan2(dx,dz);
+    }
+    if(!F.sabRaccoon) C.phase="flee";                   // shooed
+  } else if(C.phase==="climb"){
+    C.g.position.y=Math.min(3.0, C.g.position.y+dt*1.4);
+    if(C.g.position.y>=3.0){ C.phase="roofglide"; }
+    if(!F.sabRaccoon) C.phase="flee";                   // shooed late
+    if(CYCLE.phase==="night") C.phase="flee";
+  } else if(C.phase==="roofglide"){
+    const tx=K.x+0.9, tz=K.z-2.4;
+    const dx=tx-C.g.position.x, dz=tz-C.g.position.z, d=Math.hypot(dx,dz);
+    if(d>0.2){ C.g.position.x+=dx/d*1.1*dt; C.g.position.z+=dz/d*1.1*dt; C.g.rotation.y=Math.atan2(dx,dz); }
+    if(!F.sabRaccoon) C.phase="flee";                   // boil consumed it, or shooed late
+    if(CYCLE.phase==="night") C.phase="flee";
+  } else { /* flee */
+    C.g.position.x-=dt*4.5; C.g.position.z-=dt*2.2;
+    C.g.position.y=Math.max(WORLD.getH(C.g.position.x,C.g.position.z)+0.25, C.g.position.y-dt*3);
+    C.g.rotation.y=Math.atan2(-1,-0.5);
+    if(C.g.position.x<-32){ WORLD.scene.remove(C.g); WILD.coon=null; }
+  }
+};
+
+WORLD.addStation({ id:"coon",
+  get x(){ return WILD.coon?WILD.coon.g.position.x:9999; },
+  get z(){ return WILD.coon?WILD.coon.g.position.z:9999; }, r:2.6,
+  prompt(){ if(!WILD.coon || (WILD.coon.phase!=="trot"&&WILD.coon.phase!=="climb") || MAIN.mode!=="walk") return null;
+    return "🦝 SHOO the raccoon"; },
+  action(){
+    if(!WILD.coon || (WILD.coon.phase!=="trot"&&WILD.coon.phase!=="climb")) return;
+    G_STATE.flags.sabRaccoon=false;
+    WILD.coon.phase="flee";
+    SFX.play("spit", WILD.coon.g.position.x, WILD.coon.g.position.z);
+    MAIN.player.squash=0.25;
+    toast("🦝 Shooed it clear off the property. It left with most of its dignity.","",3000);
+    STORY.fame(1,"varmint patrol");
+    if(Math.random()<0.5) STORY.at(rand(20,40), ()=>WILD.copeDriveIn(DATA.COPPERHEAD.coonShooed, 4200));
+  }
+});

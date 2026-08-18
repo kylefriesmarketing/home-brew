@@ -312,6 +312,29 @@ DATA.COPPERHEAD = {
   loanOffer:"Ohh, look who's countin' nickels. Tell ya what — take the jar money. Two hundred. I'll come by for my taste, every day. Real friendly-like.",
   loanRepo:"Nothin' personal. My cousins just LOVE machinery.",
   loanPaid:"Huh. Didn't figure you for the payin' type. Respect. A little.",
+  /* Fable pass — he had nine lines for a thirty-day war. Drive-bys are keyed
+     to season and to what you did yesterday, so he reads as WATCHING you. */
+  driveby:{
+    spring:["Crick's up. Good year for drownin' hobbies.","Heard yer ramps came in. Rabbit food makes rabbit beer."],
+    summer:["Hot enough the flies are drinkin' free at my place.","Tourists everywhere. Like ticks, but they tip."],
+    fall:["Leaf-peepers pay double for anything orange. Even yer beer, probably.","Smell that? Season's turnin'. So's my generosity."],
+    winter:["Cold don't forgive sloppy work, boy. Neither do I.","Saw yer chimney smokin'. Shame if the county asked about permits."],
+    any:["Just passin' through. Countin' yer customers. All six of 'em.",
+         "My granddaddy dug that crick with a spoon. Everything past it's mine, spiritually.",
+         "Don't wave at me. This ain't a social call.",
+         "Yer sign's crooked. Been botherin' me all week."],
+  },
+  legendMorn:["Word's goin' round about some fancy batch o' yers. Words are cheap. …What's in it?",
+              "So you found one of the old recipes. My daddy chased them things his whole life. Hmph."],
+  undercutBroken:"Fine. FINE. Stand's closed. Can't compete with whatever witchcraft yer kettle's doin'.",
+  coonShooed:"…that raccoon don't work for me. Officially.",
+};
+/* one line each time the mountain turns over */
+DATA.SEASON_TURN = {
+  spring:"🌱 The crick's runnin' loud again. Spring's on the mountain.",
+  summer:"☀️ The haze settled in overnight. Summer's here — tourists follow the warmth.",
+  fall:"🍁 First red leaf on the porch this morning. Fall's coming down the ridge.",
+  winter:"❄️ Frost on the kettle. Winter's here — the mountain keeps what it grows now.",
 };
 DATA.JOE_LINES = [
   "…yer floors talk at night. I like that.",

@@ -634,6 +634,7 @@ BREW.finishBoil = function(blown){
   G_STATE.stats.brews=(G_STATE.stats.brews||0)+1;
   if(isLegend && !G_STATE.discovered[L.key]){
     G_STATE.discovered[L.key]=true;
+    G_STATE.flags.newLegendDay=G_STATE.day;      // he'll come look at you tomorrow
     toast(`⭐ LEGENDARY DISCOVERED: “${L.name}” ⭐`,"gold",5000);
     SFX.play("yay"); SFX.play("unfold");
     if(STORY) STORY.fame(8,"legendary");

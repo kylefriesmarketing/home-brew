@@ -134,8 +134,13 @@ PUB.spawnCustomer = function(type){
     const fame=G_STATE? G_STATE.fame : 0;
     const r=Math.random();
     const snobChance=clamp(fame/450, 0, 0.16);
-    type = r<0.34?"local" : r<0.58?"tourist" : r<0.74?"hiker"
-         : r<0.74+snobChance?"snob" : "student";
+    /* Copperhead's roadside stand skims the tourists before they reach you */
+    if(G_STATE && G_STATE.flags.undercut)
+      type = r<0.40?"local" : r<0.50?"tourist" : r<0.72?"hiker"
+           : r<0.72+snobChance?"snob" : "student";
+    else
+      type = r<0.34?"local" : r<0.58?"tourist" : r<0.74?"hiker"
+           : r<0.74+snobChance?"snob" : "student";
   }
   const rig=makeCustomer(type);
   rig.setPos(11.5+rand(-1,1), 28);
@@ -145,7 +150,8 @@ PUB.spawnCustomer = function(type){
     chosen:-1, drunk:0, pints:0, patience:26, mug:null, spot:null,
     /* reputation with this CLASS raises what they'll spend (Recettear) */
     wallet:DATA.CUSTOMERS[type].wallet*(0.8+rand(0.4))
-      *((typeof TASTE!=="undefined")?TASTE.walletMul(type):1),
+      *((typeof TASTE!=="undefined")?TASTE.walletMul(type):1)
+      *((G_STATE && G_STATE.flags.undercut && type==="tourist")?0.7:1),   // came pre-watered
     req:(typeof TASTE!=="undefined")?TASTE.rollRequest(type):null,
   };
   PUB.customers.push(c);
@@ -170,6 +176,8 @@ PUB.appeal = function(beer, price, type, cust){
   if(typeof TASTE!=="undefined"){
     v += TASTE.styleMod(beer, type);                 // they like it / they don't
     v *= TASTE.pop(beer.style);                      // poured it all week? it sags
+    /* Fable pass: a regular's USUAL is personal, over and above the archetype */
+    if(cust && cust.regularFav && beer.style===cust.regularFav) v+=1.6;
     /* a RED condition is a hard gate — they walk rather than settle */
     if(cust && cust.req && !TASTE.meetsRed(beer, cust.req)) return -99;
   }
@@ -309,6 +317,9 @@ PUB.finishDrink = function(c){
     if(c.type==="tourist") G_STATE.tonight.touristsSwilled++;
     if(Math.random()<0.45){ c.state="toFicus"; return; }
   }
+  /* Fable pass: the night keeps score, and the regulars remember */
+  if(beer.tier==="great"||beer.tier==="legend") G_STATE.tonight.good=(G_STATE.tonight.good||0)+1;
+  if(typeof REGULARS!=="undefined" && c.regular) REGULARS.onDrink(c, beer);
   c.drunk++;
   // reorder? browse the gift shop? or head home
   if(beer.tier!=="swill" && c.wallet>2 && Math.random()<(beer.tier==="legend"?0.65:0.4) && c.drunk<3){

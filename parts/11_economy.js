@@ -28,6 +28,7 @@ ECON.freshState = function(){
     puddles:[], brags:{},
     pop:{}, rep:{},                   // M3: style fatigue + per-archetype reputation
     grannyDrift:0,                    // M4: the thermostat wanders out of true
+    regulars:{},                      // Fable pass: the six who come back
   };
 };
 ECON.newState = function(){

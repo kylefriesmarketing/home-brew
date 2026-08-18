@@ -1,9 +1,60 @@
-# HOME BREW — dev notes (v2.0 — all six milestones complete)
+# HOME BREW — dev notes (v2.1 — the Fable pass)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v2.1 — **THE FABLE PASS** (`25_regulars.js`) — the game gets a memory
+
+The milestones fixed the machine. This pass is about the people.
+
+- 👥 **SIX NAMED REGULARS.** Every local used to be "Local" — a stream of
+  strangers, nobody came back, nobody remembered. Earl (retired miner),
+  Maybelle (mail carrier), June (fiddle player), Deacon (walks the ridge),
+  Wren (trail crew), and Odell (had a dog) now ride the existing archetype
+  machinery — a regular IS a local/hiker/student with identity layered on, so
+  appetites/requests/reputation all still apply. They persist across days AND
+  saves (`G_STATE.regulars`), greet you differently as visits accrue, and each
+  carries a **three-beat story** that unlocks at visits 3/7/12 — Earl's
+  fourteen boys, Maybelle's 1961 letter, Wren's boots. After 3 pints their
+  **usual** crystallizes (tracked per-style per-person): keep it on tap and
+  they notice out loud (+1.6 personal appeal via `PUB.appeal`'s cust param,
+  small tip, fame). ⚠️ claim intercepts `PUB.spawnCustomer` via wrapper —
+  10_pub itself stays almost untouched.
+- 🎻 **JUNE PLAYS.** Pour her something great and she gets the fiddle out —
+  16s of plucked notes, the room's patience refreshed, nobody leaves. Once a
+  day, only when the beer earned it.
+- 🪧 **THE UNDERCUT WAR IS REAL** — `flags.undercut` was set, toasted, and
+  read by NOBODY. Now: a painted "$2" road sign appears, tourists get skimmed
+  (26%→10% of arrivals) and arrive pre-watered (wallet ×0.7, $22.5→$15.5
+  measured). **It resolves on QUALITY, not price**: 4+ great/legendary pints
+  in an evening breaks the stand overnight (+6 fame, he drives in to concede).
+  ⚠️ **He is cheap, not tireless** — an unbroken stand folds by itself after 3
+  mornings ("Weren't the money. Got bored."), or the whole sabotage flow
+  behind it starves: a 30-day soak showed ONE early undercut blocking every
+  raccoon for the rest of the month. Waiting him out earns nothing; breaking
+  it pays.
+- 🦝 **THE RACCOON HAS A BODY.** Sabotage mornings, it visibly slinks from
+  the treeline; catch it (E, works on the ground OR mid-climb) to cancel the
+  boil sabotage before it starts. Miss it and it climbs the OUTSIDE wall to
+  the roof and waits for your boil — ⚠️ first version pathed straight through
+  the shack geometry; a screenshot caught it, climb now starts at d<3.4.
+- 🚗 **COPPERHEAD WATCHES YOU.** His 9 lines became ~25: seasonal drive-by
+  heckles (~1 per 3 days measured), and the morning after your first
+  legendary he drives in to ask what's in it. `copeDriveIn` grew a `hold`
+  param so multi-beat scenes keep him at the porch.
+- 🌄 **Season-turn vignettes** — one line each time the mountain turns over.
+- 🏆 **THE ENDING HAPPENS ON YOUR PORCH.** worldsFinale now drives him in and
+  HOLDS him there through both beats (verified at t=12s he's still standing
+  there) — the winning line, and then the truth: *"That jar I left, first
+  week? Weren't no charity. That was my best batch. Wanted to see what you'd
+  DO with it."* Then the epilogue, then credits.
+
+Verified: claim/greet/beats/usual/fiddle all measured live; undercut
+break-by-quality AND fold-by-boredom paths; raccoon full path (trot→climb
+outside→roofglide→flee) + shoo; 40-day soak = 7 raccoon days, 13 undercut
+days, folds observed, **0 errors**; save round-trips regulars; ~5-6ms/frame.
 
 ## New in v2.0 — **MILESTONE 6 of 6: HARDENING** ✅ — *the plan is complete*
 

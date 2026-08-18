@@ -149,6 +149,17 @@ CYCLE.tallyLines = function(){
 };
 
 CYCLE.finishSleep = function(){
+  /* Fable pass: the undercut war resolves on QUALITY, not price — pour a great
+     night while his stand is up and word beats cheap */
+  let underLine=null;
+  if(G_STATE.flags.undercut){
+    if((G_STATE.tonight.good||0)>=4){
+      G_STATE.flags.undercut=false;
+      G_STATE.flags.undercutBrokeDay=G_STATE.day+1; G_STATE.flags.undercutDays=0;
+      STORY.fame(6,"word beats cheap");
+      underLine="🪧 Copperhead's stand came DOWN overnight. Cheap don't survive a room full of great beer.";
+    }
+  }
   /* the night's bills come due BEFORE the ledger resets, so they show in the
      tally you just read */
   const up=CYCLE.upkeep();
@@ -179,6 +190,7 @@ CYCLE.finishSleep = function(){
   setTimeout(()=>{
     toast(`🌄 Day ${G_STATE.day} on the mountain.`,"",3000);
     if(upkeepLine) setTimeout(()=>toast(upkeepLine, G_STATE.cash<=0?"bad":"",3400),900);
+    if(underLine) setTimeout(()=>toast(underLine,"gold",4600),2100);
     if(loanLine) setTimeout(()=>toast(loanLine, loanLine.includes("REPO")?"bad":"","3600"),1500);
     const ready=G_STATE.ferms.filter(f=>f.ready).length;
     if(ready) setTimeout(()=>toast(`🫧 ${ready} fermenter${ready>1?"s":""} ready to keg!`,"gold",3000),2600);

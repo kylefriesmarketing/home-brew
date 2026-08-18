@@ -154,7 +154,7 @@ kbd{background:#3a3128;color:#ffd98a;border-radius:4px;border:1px solid #6b4a2f;
     <div class="credit">a Dirty Boy Devs joint · The Room</div>
   </div>
   <div class="bigfade" id="fade"></div>
-  <div id="verchip">home brew v2.0</div>
+  <div id="verchip">home brew v2.1</div>
 </div>
 <script>
 (function(){
@@ -53520,6 +53520,29 @@ DATA.COPPERHEAD = {
   loanOffer:"Ohh, look who's countin' nickels. Tell ya what — take the jar money. Two hundred. I'll come by for my taste, every day. Real friendly-like.",
   loanRepo:"Nothin' personal. My cousins just LOVE machinery.",
   loanPaid:"Huh. Didn't figure you for the payin' type. Respect. A little.",
+  /* Fable pass — he had nine lines for a thirty-day war. Drive-bys are keyed
+     to season and to what you did yesterday, so he reads as WATCHING you. */
+  driveby:{
+    spring:["Crick's up. Good year for drownin' hobbies.","Heard yer ramps came in. Rabbit food makes rabbit beer."],
+    summer:["Hot enough the flies are drinkin' free at my place.","Tourists everywhere. Like ticks, but they tip."],
+    fall:["Leaf-peepers pay double for anything orange. Even yer beer, probably.","Smell that? Season's turnin'. So's my generosity."],
+    winter:["Cold don't forgive sloppy work, boy. Neither do I.","Saw yer chimney smokin'. Shame if the county asked about permits."],
+    any:["Just passin' through. Countin' yer customers. All six of 'em.",
+         "My granddaddy dug that crick with a spoon. Everything past it's mine, spiritually.",
+         "Don't wave at me. This ain't a social call.",
+         "Yer sign's crooked. Been botherin' me all week."],
+  },
+  legendMorn:["Word's goin' round about some fancy batch o' yers. Words are cheap. …What's in it?",
+              "So you found one of the old recipes. My daddy chased them things his whole life. Hmph."],
+  undercutBroken:"Fine. FINE. Stand's closed. Can't compete with whatever witchcraft yer kettle's doin'.",
+  coonShooed:"…that raccoon don't work for me. Officially.",
+};
+/* one line each time the mountain turns over */
+DATA.SEASON_TURN = {
+  spring:"🌱 The crick's runnin' loud again. Spring's on the mountain.",
+  summer:"☀️ The haze settled in overnight. Summer's here — tourists follow the warmth.",
+  fall:"🍁 First red leaf on the porch this morning. Fall's coming down the ridge.",
+  winter:"❄️ Frost on the kettle. Winter's here — the mountain keeps what it grows now.",
 };
 DATA.JOE_LINES = [
   "…yer floors talk at night. I like that.",
@@ -56231,6 +56254,7 @@ BREW.finishBoil = function(blown){
   G_STATE.stats.brews=(G_STATE.stats.brews||0)+1;
   if(isLegend && !G_STATE.discovered[L.key]){
     G_STATE.discovered[L.key]=true;
+    G_STATE.flags.newLegendDay=G_STATE.day;      // he'll come look at you tomorrow
     toast(`⭐ LEGENDARY DISCOVERED: “${L.name}” ⭐`,"gold",5000);
     SFX.play("yay"); SFX.play("unfold");
     if(STORY) STORY.fame(8,"legendary");
@@ -56401,8 +56425,13 @@ PUB.spawnCustomer = function(type){
     const fame=G_STATE? G_STATE.fame : 0;
     const r=Math.random();
     const snobChance=clamp(fame/450, 0, 0.16);
-    type = r<0.34?"local" : r<0.58?"tourist" : r<0.74?"hiker"
-         : r<0.74+snobChance?"snob" : "student";
+    /* Copperhead's roadside stand skims the tourists before they reach you */
+    if(G_STATE && G_STATE.flags.undercut)
+      type = r<0.40?"local" : r<0.50?"tourist" : r<0.72?"hiker"
+           : r<0.72+snobChance?"snob" : "student";
+    else
+      type = r<0.34?"local" : r<0.58?"tourist" : r<0.74?"hiker"
+           : r<0.74+snobChance?"snob" : "student";
   }
   const rig=makeCustomer(type);
   rig.setPos(11.5+rand(-1,1), 28);
@@ -56412,7 +56441,8 @@ PUB.spawnCustomer = function(type){
     chosen:-1, drunk:0, pints:0, patience:26, mug:null, spot:null,
     /* reputation with this CLASS raises what they'll spend (Recettear) */
     wallet:DATA.CUSTOMERS[type].wallet*(0.8+rand(0.4))
-      *((typeof TASTE!=="undefined")?TASTE.walletMul(type):1),
+      *((typeof TASTE!=="undefined")?TASTE.walletMul(type):1)
+      *((G_STATE && G_STATE.flags.undercut && type==="tourist")?0.7:1),   // came pre-watered
     req:(typeof TASTE!=="undefined")?TASTE.rollRequest(type):null,
   };
   PUB.customers.push(c);
@@ -56437,6 +56467,8 @@ PUB.appeal = function(beer, price, type, cust){
   if(typeof TASTE!=="undefined"){
     v += TASTE.styleMod(beer, type);                 // they like it / they don't
     v *= TASTE.pop(beer.style);                      // poured it all week? it sags
+    /* Fable pass: a regular's USUAL is personal, over and above the archetype */
+    if(cust && cust.regularFav && beer.style===cust.regularFav) v+=1.6;
     /* a RED condition is a hard gate — they walk rather than settle */
     if(cust && cust.req && !TASTE.meetsRed(beer, cust.req)) return -99;
   }
@@ -56576,6 +56608,9 @@ PUB.finishDrink = function(c){
     if(c.type==="tourist") G_STATE.tonight.touristsSwilled++;
     if(Math.random()<0.45){ c.state="toFicus"; return; }
   }
+  /* Fable pass: the night keeps score, and the regulars remember */
+  if(beer.tier==="great"||beer.tier==="legend") G_STATE.tonight.good=(G_STATE.tonight.good||0)+1;
+  if(typeof REGULARS!=="undefined" && c.regular) REGULARS.onDrink(c, beer);
   c.drunk++;
   // reorder? browse the gift shop? or head home
   if(beer.tier!=="swill" && c.wallet>2 && Math.random()<(beer.tier==="legend"?0.65:0.4) && c.drunk<3){
@@ -56767,6 +56802,7 @@ ECON.freshState = function(){
     puddles:[], brags:{},
     pop:{}, rep:{},                   // M3: style fatigue + per-archetype reputation
     grannyDrift:0,                    // M4: the thermostat wanders out of true
+    regulars:{},                      // Fable pass: the six who come back
   };
 };
 ECON.newState = function(){
@@ -57194,8 +57230,32 @@ STORY.onDay = function(day){
       if(!(typeof WILD!=="undefined" && WILD.copeDriveIn("Found that in the back o' the still. Figured yer swill could use help.",5000)))
         STORY.copperSay("Found that in the back o' the still. Figured yer swill could use help.",5000); });
   }
-  /* sabotage era after rank 1 */
-  if(G_STATE.rank>=1 && day>2 && !G_STATE.flags["sab"+day] && Math.random()<0.35){
+  /* Fable pass: one line each time the mountain turns over */
+  if(typeof SEASONS!=="undefined" && day>1 && SEASONS.of(day)!==SEASONS.of(day-1))
+    STORY.at(5, ()=>toast(DATA.SEASON_TURN[SEASONS.of(G_STATE.day)],"gold",5000));
+  /* Fable pass: the morning after a legendary is born, he comes to look at you */
+  if(G_STATE.flags.newLegendDay===day-1){
+    G_STATE.flags.newLegendDay=0;
+    STORY.at(rand(14,30), ()=>{ if(typeof WILD!=="undefined") WILD.copeDriveIn(pick(DATA.COPPERHEAD.legendMorn), 6000); });
+  }
+  /* sabotage era after rank 1 — ⚠️ the undercut PERSISTS until you break it
+     (great beer, see finishSleep); it used to clear itself silently every
+     morning, which is why the flag read as dead */
+  if(G_STATE.flags.undercut){
+    /* ⚠️ he is cheap, not tireless — an unbroken stand folds on its own after
+       three mornings, or the whole sabotage/drive-by flow behind it starves
+       (found by a 30-day soak: one early undercut blocked every raccoon for
+       the rest of the month). Breaking it with quality is still the GOOD exit:
+       fame +6 and a concession. Waiting him out earns nothing. */
+    G_STATE.flags.undercutDays=(G_STATE.flags.undercutDays||0)+1;
+    if(G_STATE.flags.undercutDays>=4){
+      G_STATE.flags.undercut=false; G_STATE.flags.undercutDays=0;
+      STORY.at(10,()=>{ toast("🪧 The stand's gone this morning. Nothing announced. Nothing explained.","",4000);
+        if(typeof WILD!=="undefined") STORY.at(8,()=>WILD.copeDriveIn("Stand's closed. Weren't the money. Got bored. …Weren't the money.",5000)); });
+    } else {
+      STORY.at(8,()=>toast("🪧 Copperhead's stand is still up the road. Cheap travels — but word travels harder.","bad",4200));
+    }
+  } else if(G_STATE.rank>=1 && day>2 && !G_STATE.flags["sab"+day] && Math.random()<0.35){
     G_STATE.flags["sab"+day]=true;
     if(Math.random()<0.5){
       G_STATE.flags.sabRaccoon=true;
@@ -57204,7 +57264,18 @@ STORY.onDay = function(day){
       G_STATE.flags.undercut=true;
       STORY.at(8,()=>toast("🪧 "+DATA.COPPERHEAD.undercut,"bad",4500));
     }
-  } else G_STATE.flags.undercut=false;
+  } else if(day>2 && Math.random()<0.22){
+    /* Fable pass: drive-by mornings — he watches, seasonally */
+    const P=DATA.COPPERHEAD.driveby;
+    const pool=(typeof SEASONS!=="undefined" && P[SEASONS.current] && Math.random()<0.6)
+      ? P[SEASONS.current] : P.any;
+    STORY.at(rand(15,45), ()=>{ if(typeof WILD!=="undefined") WILD.copeDriveIn(pick(pool), 5000); });
+  }
+  /* the morning after the stand broke, he concedes it — in person */
+  if(G_STATE.flags.undercutBrokeDay===day){
+    G_STATE.flags.undercutBrokeDay=0;
+    STORY.at(rand(20,35), ()=>{ if(typeof WILD!=="undefined") WILD.copeDriveIn(DATA.COPPERHEAD.undercutBroken, 5500); });
+  }
   /* festival mornings (one at a time, biggest first) */
   for(const type of ["world","regional","fair"]){
     const F=FEST[type];
@@ -57360,12 +57431,17 @@ STORY.festResult = function(res, beer){
 STORY.worldsFinale = function(){
   spawnItem("trophy", 14.9, -4.9, {}).y=2.0;
   for(let i=0;i<60;i++) setTimeout(()=>puff(MAIN.player.x+rand(-8,8), 7+rand(4), MAIN.player.z+rand(-8,8), pick([0x86b04c,0xe8a33d,0xffd98a]), 0.22, -0.5, 3), i*60);
-  STORY.copperSay(DATA.CH2.worldsWin,7000);
   G_STATE.flags.jarLegal=true;
   WINGS.buildJerky();
   WINGS.checkHatUnlocks();
-  STORY.at(3,()=>toast(DATA.CH2.epilogue,"gold",7000));
-  STORY.at(6,()=>UI.credits());
+  /* Fable pass: the campaign's last scene happens ON YOUR PORCH, not from
+     across the crick. He drives in one final time — no honk, for once — and
+     says the thing the whole game was for. Then the truth about the jar. */
+  const drove = (typeof WILD!=="undefined") && WILD.copeDriveIn(DATA.CH2.worldsWin, 7000, 17);
+  if(!drove) STORY.copperSay(DATA.CH2.worldsWin,7000);
+  STORY.at(8.5,()=>STORY.copperSay("That jar I left, first week? Weren't no charity. That was my best batch. Wanted to see what you'd DO with it.",7500));
+  STORY.at(16,()=>toast(DATA.CH2.epilogue,"gold",7000));
+  STORY.at(21,()=>UI.credits());
 };
 
 /* ---------- Hollow Joe hints ---------- */
@@ -57534,6 +57610,17 @@ CYCLE.tallyLines = function(){
 };
 
 CYCLE.finishSleep = function(){
+  /* Fable pass: the undercut war resolves on QUALITY, not price — pour a great
+     night while his stand is up and word beats cheap */
+  let underLine=null;
+  if(G_STATE.flags.undercut){
+    if((G_STATE.tonight.good||0)>=4){
+      G_STATE.flags.undercut=false;
+      G_STATE.flags.undercutBrokeDay=G_STATE.day+1; G_STATE.flags.undercutDays=0;
+      STORY.fame(6,"word beats cheap");
+      underLine="🪧 Copperhead's stand came DOWN overnight. Cheap don't survive a room full of great beer.";
+    }
+  }
   /* the night's bills come due BEFORE the ledger resets, so they show in the
      tally you just read */
   const up=CYCLE.upkeep();
@@ -57564,6 +57651,7 @@ CYCLE.finishSleep = function(){
   setTimeout(()=>{
     toast(`🌄 Day ${G_STATE.day} on the mountain.`,"",3000);
     if(upkeepLine) setTimeout(()=>toast(upkeepLine, G_STATE.cash<=0?"bad":"",3400),900);
+    if(underLine) setTimeout(()=>toast(underLine,"gold",4600),2100);
     if(loanLine) setTimeout(()=>toast(loanLine, loanLine.includes("REPO")?"bad":"","3600"),1500);
     const ready=G_STATE.ferms.filter(f=>f.ready).length;
     if(ready) setTimeout(()=>toast(`🫧 ${ready} fermenter${ready>1?"s":""} ready to keg!`,"gold",3000),2600);
@@ -61347,13 +61435,13 @@ WILD.dotUpdate = function(dt){
 };
 
 /* ---------- COPPERHEAD, IN YOUR YARD ---------- */
-WILD.copeDriveIn = function(line, ms){
+WILD.copeDriveIn = function(line, ms, hold){
   if(WILD.copeTruck) return false;
   const g=(typeof mkPickup==="function")?mkPickup():null;
   if(!g) return false;
   g.position.set(-70, WORLD.getH(0,27), 26.6);
   g.rotation.y=Math.PI/2;
-  WILD.copeTruck={ g, t:0, phase:"in", line, ms:ms||5000 };
+  WILD.copeTruck={ g, t:0, phase:"in", line, ms:ms||5000, hold:hold||0 };
   return true;
 };
 WILD.copeUpdate = function(dt){
@@ -61373,7 +61461,7 @@ WILD.copeUpdate = function(dt){
     }
   } else if(T.phase==="talk"){
     if(C){ C.speedNow=0; animatePerson(C,dt); }
-    if(T.t> (T.ms/1000)+1.2){ T.phase="out"; T.t=0; if(C) C.busy=false; }
+    if(T.t> Math.max((T.ms/1000)+1.2, T.hold)){ T.phase="out"; T.t=0; if(C) C.busy=false; }
   } else {
     T.g.position.x=lerp(6, 72, Math.min(1,T.t/3.6));
     for(const w of T.g.userData.wheels) w.rotation.x+=dt*8;
@@ -61386,6 +61474,7 @@ WILD.copeUpdate = function(dt){
 WILD.setup = function(){
   WILD.buildForage();
   WILD.buildDot();
+  WILD.buildSign();
   BUS.on("newday", ()=>{ WILD.dayReset(); });
   BUS.on("phase", ()=>{ for(const p of WILD.patches) WILD.refreshPatch(p); });
 };
@@ -61393,12 +61482,256 @@ WILD.update = function(dt){
   if(!G_STATE) return;
   WILD.dotUpdate(dt);
   WILD.copeUpdate(dt);
+  WILD.coonUpdate(dt);
+  if(WILD.sign) WILD.sign.visible=!!G_STATE.flags.undercut;
+  if(typeof REGULARS!=="undefined") REGULARS.update(dt);
   /* M5: the camera pulls back as the empire grows — bible §4 and §18 both
      promise this as the "one mountain, deepening" payoff, and camDist was
      written in exactly ONE place: the mouse wheel. */
   const rank=G_STATE.rank||0;
   MAIN.camMax = 24 + rank*3.5;
 };
+
+/* ---------- Fable pass: the undercut war made visible ---------- */
+WILD.buildSign = function(){
+  const g=new THREE.Group();
+  const post=clayCyl(0.07,0.07,1.5,0x6a4a30); post.position.y=0.75; g.add(post);
+  const board=clayBox(1.5,0.7,0.09,0xe8d9a8,0.2); board.position.y=1.5; g.add(board);
+  const trim=clayBox(1.56,0.1,0.1,0xb5472e,0.2); trim.position.y=1.88; g.add(trim);
+  /* a crude painted "$2" — two strokes, mountain signage at its finest */
+  const s1=clayBox(0.1,0.42,0.1,0xb5472e,0.2); s1.position.set(-0.25,1.5,0.03); s1.rotation.z=0.2; g.add(s1);
+  const s2=clayBox(0.34,0.1,0.1,0xb5472e,0.2); s2.position.set(0.18,1.42,0.03); g.add(s2);
+  const s3=clayBox(0.34,0.1,0.1,0xb5472e,0.2); s3.position.set(0.18,1.62,0.03); g.add(s3);
+  g.position.set(-9.5, WORLD.getH(-9.5,27.2), 27.2);
+  g.rotation.y=0.25; g.visible=false;
+  WORLD.scene.add(g);
+  WILD.sign=g;
+};
+
+/* ---------- Fable pass: the raccoon has a body now ---------- */
+WILD.coonUpdate = function(dt){
+  const F=G_STATE.flags;
+  /* spawn: on a sabotage morning the varmint walks IN, visibly, and can be
+     caught before it ever reaches your roof */
+  if(F.sabRaccoon && !WILD.coon && F.coonDay!==G_STATE.day
+     && (CYCLE.phase==="morning"||CYCLE.phase==="afternoon")){
+    F.coonDay=G_STATE.day;
+    const g=makeRaccoon();
+    g.position.set(-30, WORLD.getH(-30,-16), -16);
+    WORLD.scene.add(g);
+    WILD.coon={g, phase:"trot", t:0};
+    toast("🦝 Something's slinking toward the kettle…","bad",3200);
+  }
+  const C=WILD.coon; if(!C) return;
+  C.t+=dt;
+  const K=WORLD.anchors.kettle;
+  if(C.phase==="trot"){
+    /* ⚠️ it climbs the OUTSIDE wall — aiming straight at the kettle walked it
+       through the shack geometry, which a screenshot caught immediately */
+    const tx=K.x+0.9, tz=K.z-2.4;
+    const dx=tx-C.g.position.x, dz=tz-C.g.position.z, d=Math.hypot(dx,dz);
+    if(d<3.4){ C.phase="climb"; C.t=0; }
+    else{
+      C.g.position.x+=dx/d*1.5*dt; C.g.position.z+=dz/d*1.5*dt;
+      C.g.position.y=WORLD.getH(C.g.position.x,C.g.position.z)+0.25+Math.abs(Math.sin(C.t*9))*0.06;
+      C.g.rotation.y=Math.atan2(dx,dz);
+    }
+    if(!F.sabRaccoon) C.phase="flee";                   // shooed
+  } else if(C.phase==="climb"){
+    C.g.position.y=Math.min(3.0, C.g.position.y+dt*1.4);
+    if(C.g.position.y>=3.0){ C.phase="roofglide"; }
+    if(!F.sabRaccoon) C.phase="flee";                   // shooed late
+    if(CYCLE.phase==="night") C.phase="flee";
+  } else if(C.phase==="roofglide"){
+    const tx=K.x+0.9, tz=K.z-2.4;
+    const dx=tx-C.g.position.x, dz=tz-C.g.position.z, d=Math.hypot(dx,dz);
+    if(d>0.2){ C.g.position.x+=dx/d*1.1*dt; C.g.position.z+=dz/d*1.1*dt; C.g.rotation.y=Math.atan2(dx,dz); }
+    if(!F.sabRaccoon) C.phase="flee";                   // boil consumed it, or shooed late
+    if(CYCLE.phase==="night") C.phase="flee";
+  } else { /* flee */
+    C.g.position.x-=dt*4.5; C.g.position.z-=dt*2.2;
+    C.g.position.y=Math.max(WORLD.getH(C.g.position.x,C.g.position.z)+0.25, C.g.position.y-dt*3);
+    C.g.rotation.y=Math.atan2(-1,-0.5);
+    if(C.g.position.x<-32){ WORLD.scene.remove(C.g); WILD.coon=null; }
+  }
+};
+
+WORLD.addStation({ id:"coon",
+  get x(){ return WILD.coon?WILD.coon.g.position.x:9999; },
+  get z(){ return WILD.coon?WILD.coon.g.position.z:9999; }, r:2.6,
+  prompt(){ if(!WILD.coon || (WILD.coon.phase!=="trot"&&WILD.coon.phase!=="climb") || MAIN.mode!=="walk") return null;
+    return "🦝 SHOO the raccoon"; },
+  action(){
+    if(!WILD.coon || (WILD.coon.phase!=="trot"&&WILD.coon.phase!=="climb")) return;
+    G_STATE.flags.sabRaccoon=false;
+    WILD.coon.phase="flee";
+    SFX.play("spit", WILD.coon.g.position.x, WILD.coon.g.position.z);
+    MAIN.player.squash=0.25;
+    toast("🦝 Shooed it clear off the property. It left with most of its dignity.","",3000);
+    STORY.fame(1,"varmint patrol");
+    if(Math.random()<0.5) STORY.at(rand(20,40), ()=>WILD.copeDriveIn(DATA.COPPERHEAD.coonShooed, 4200));
+  }
+});
+
+</script>
+<script>/* ===== 25_regulars.js ===== */
+"use strict";
+/* REGULARS — the Fable pass. The pub served a stream of strangers: every local
+   was "Local", nobody came back, nobody remembered. Six named souls now ride
+   the existing archetype machinery — a regular IS a local/hiker/student with
+   identity layered on, so appetites, requests and reputation all still apply.
+   They remember their visits across days AND saves, develop a usual, and each
+   carries a small three-beat story that only shows itself if they keep coming. */
+
+const REGULARS = {
+  fiddle:null,
+  ROSTER:[
+    { key:"earl", name:"Earl", base:"local", who:"retired miner",
+      look:{skin:0xc98c5a, shirt:0x5a5a52, pants:0x4a4a42, hat:"trucker", belly:true},
+      intro:"Earl. Thirty-one years in the Coppervale seam. You pour, I'll sit.",
+      greets:["Evenin'. Same stool.","Still standin', this place. Good.","Don't mind me. Mind the beer."],
+      beats:["Mine took my knees and my hearin'. Left my thirst, mercifully.",
+             "Can't drink the dark ones no more. Tastes like the seam. No offense to yer stout.",
+             "Fourteen boys never came up from Coppervale. I drink the first sip slow. That's for them."],
+      chat:["hm.","*settles*","quiet night. good kind."] },
+    { key:"maybelle", name:"Maybelle", base:"local", who:"mail carrier",
+      look:{skin:0xe8b48c, shirt:0x5a6a9a, pants:0x4a4a42, accessory:"pack"},
+      intro:"Maybelle. I carry the mail, which means I carry everything worth knowin'. One pint.",
+      greets:["Route ends here now. On purpose.","You didn't hear NOTHIN' from me.","Evenin', sugar. What's fresh?"],
+      beats:["Copperhead writes to a sister in Knoxville every week. Real careful handwritin'. Don't tell him I said.",
+             "Found a letter in the dead-pile addressed to this property. 1961. Somebody up here was brewin' long before you.",
+             "Twenty-two years on this route. It never felt short 'til it started endin' at your porch."],
+      chat:["mm-HM.","the THINGS I could tell you","*sorts envelopes*"] },
+    { key:"june", name:"June", base:"local", who:"fiddle player",
+      look:{skin:0x8a5a3a, shirt:0x8a4a5a, pants:0x4a4a42, hat:"straw"},
+      intro:"June. I play a little. If the beer's honest I might prove it.",
+      greets:["Brought the fiddle. Just in case.","Evenin'. Room sounds right tonight.","Somethin' worth playin' about on tap?"],
+      beats:["My granny played this mountain 'fore there was a road on it. Same fiddle. She's in the wood somewhere.",
+             "I don't play for money. I play so the room remembers it was happy. Different trade.",
+             "Wrote a reel last week. Callin' it the Home Brew. It's got a stumble in the middle — that's on purpose."],
+      chat:["*hums*","*tunes a string*","la — no. LA. there it is."] },
+    { key:"deacon", name:"Deacon", base:"hiker", who:"walks the ridge",
+      look:{skin:0xe8b48c, shirt:0x4c7a4c, pants:0x5e402a, hat:"beanie", accessory:"pack"},
+      intro:"Deacon. Walked down off the ridge. It'll keep.",
+      greets:["The ridge says hello.","Down for the evenin'.","*nods*"],
+      beats:["Folks ask what I'm lookin' for up there. Nothin'. That's the entire point.",
+             "You can hear this place from the second switchback now. The talkin', the pourin'. Carries clean.",
+             "Brought you a crick stone. Round as forty years of water could make it. Put it by the taps."],
+      chat:["…","*looks out the window*","it'll rain Thursday."] },
+    { key:"wren", name:"Wren", base:"student", who:"trail crew",
+      look:{skin:0xf0c8a0, shirt:0xe8c23d, pants:0x4a4a6a, hat:"trucker"},
+      intro:"Wren. Trail crew. I got seven dollars and I earned every one of 'em today.",
+      greets:["cheapest GOOD one, please","crew got the switchback done!!","I'm SO tired. one beer."],
+      beats:["Savin' for real boots. The waterproof kind. Four more paychecks.",
+             "GOT THE BOOTS. Look at 'em. LOOK at them.",
+             "They made me crew lead. First round's on me — for the whole room. Put it on my tab. My LEAD tab."],
+      chat:["blister count: four","the NEW kid stepped in the crick","*falls asleep sitting up*"] },
+    { key:"odell", name:"Odell", base:"hiker", who:"had a dog",
+      look:{skin:0xc98c5a, shirt:0x5a8a8a, pants:0x5e402a},
+      intro:"Odell. Used to walk this stretch with my dog Biscuit. Still walk it.",
+      greets:["evenin'. just the one.","porch looks good in this light.","*waves at a bird*"],
+      beats:["Biscuit's up past the bee tree. Best spot on the mountain. He'd have liked your porch.",
+             "There's a stray been followin' me since the trailhead. I ain't feedin' her. …I'm feedin' her a little.",
+             "Named the pup after yer beer. She answers to it and everything. Good name. Good beer."],
+      chat:["*whistles low*","she's out there waitin' on me","good porch. good night."] },
+  ],
+};
+
+REGULARS.state = function(key){
+  if(!G_STATE.regulars) G_STATE.regulars={};                    // old saves
+  return G_STATE.regulars[key] || (G_STATE.regulars[key]={v:0,last:-1,fav:null,sc:{},n:0,beat:0});
+};
+
+/* ---------- claiming: a fresh generic spawn becomes a regular ---------- */
+REGULARS.claim = function(c){
+  if(!G_STATE || CYCLE.phase!=="evening" || G_STATE.day<2) return;
+  if(c.regular || c.def.special) return;
+  const cands=REGULARS.ROSTER.filter(r=>r.base===c.type
+    && REGULARS.state(r.key).last!==G_STATE.day
+    && !PUB.customers.some(o=>o!==c && o.regular===r.key));
+  if(!cands.length) return;
+  const r=pick(cands);
+  if(Math.random()>0.5) return;                                 // they have lives
+  const s=REGULARS.state(r.key);
+  s.v++; s.last=G_STATE.day;
+  /* swap the anonymous rig for THEIR body, in place */
+  const old=c.rig;
+  WORLD.scene.remove(old.group);
+  const rig=makePerson(Object.assign({size:1.0}, r.look));
+  rig.ctype=c.type; rig.setPos(old.x, old.z); rig.facing=old.facing;
+  WORLD.scene.add(rig.group);
+  c.rig=rig; c.regular=r.key;
+  c.def=Object.assign({}, c.def, {chat:r.chat});                // their voice, not the archetype's
+  /* the greeting: first visit introduces, milestones deepen, otherwise familiar */
+  let line=null, hold=3400;
+  if(s.v===1) line=r.intro;
+  else { const bi = s.v>=12?2 : s.v>=7?1 : s.v>=3?0 : -1;
+    if(bi>=0 && s.beat<=bi){ s.beat=bi+1; line=r.beats[bi]; hold=6000; }
+    else line=pick(r.greets);
+  }
+  if(line) setTimeout(()=>{ if(!c.dead) UI.bubbleRig(rig, `<span class="who">${r.name} · ${r.who}</span>“${line}”`, hold); }, rand(1200,2600));
+  /* the USUAL: once known, seeing it on tap matters */
+  if(s.fav){
+    c.regularFav=s.fav;
+    const on=G_STATE.taps.some(t=>t.beer && t.pints>0 && t.beer.style===s.fav);
+    if(on) setTimeout(()=>{ if(!c.dead){
+      UI.bubbleRig(rig, `<span class="who">${r.name}</span>“You kept my usual on. You KEPT it on.”`, 3200);
+      STORY.fame(1.5,"a regular's usual");
+    }}, 4600);
+  }
+};
+
+/* ---------- memory: every pint teaches us their taste ---------- */
+REGULARS.onDrink = function(c, beer){
+  const r=REGULARS.ROSTER.find(x=>x.key===c.regular); if(!r) return;
+  const s=REGULARS.state(c.regular);
+  const w = beer.tier==="legend"?3 : beer.tier==="great"?2 : beer.tier==="good"?1 : beer.tier==="decent"?0.4 : 0;
+  s.sc[beer.style]=(s.sc[beer.style]||0)+w; s.n++;
+  if(s.n>=3 && !s.fav){
+    let best=null,bv=-1; for(const k in s.sc) if(s.sc[k]>bv){ bv=s.sc[k]; best=k; }
+    if(bv>0){ s.fav=best;
+      const st=DATA.STYLES.find(x=>x.key===best);
+      setTimeout(()=>{ if(!c.dead) UI.bubbleRig(c.rig,
+        `<span class="who">${r.name}</span>“That ${st?st.name:best}… that's my one. That's the one I'll be wantin'.”`, 4200); }, 1600);
+    }
+  } else if(s.fav && beer.style===s.fav && w>=1){
+    ECON.earn(1.5*c.def.tipMul, "tips");                        // the usual, poured right
+  }
+  /* June plays when the beer earns it */
+  if(c.regular==="june" && w>=2 && !REGULARS.fiddle && G_STATE.flags.fiddleDay!==G_STATE.day){
+    G_STATE.flags.fiddleDay=G_STATE.day;
+    REGULARS.startFiddle(c);
+  }
+};
+
+/* ---------- June's fiddle — the room holds still for it ---------- */
+REGULARS.startFiddle = function(c){
+  REGULARS.fiddle={t:16, c, note:0};
+  toast("🎻 June's got the fiddle out. Nobody's leaving yet.","gold",3600);
+  for(const o of PUB.customers){ if(!o.dead && o.state!=="leave" && o.state!=="road") o.patience=Math.max(o.patience,14); }
+  STORY.fame(2,"June played");
+};
+REGULARS.update = function(dt){
+  const F=REGULARS.fiddle; if(!F) return;
+  F.t-=dt;
+  const r=F.c && !F.c.dead ? F.c.rig : null;
+  if(!r || F.t<=0){ REGULARS.fiddle=null; return; }
+  F.note-=dt;
+  if(F.note<=0){ F.note=0.45+Math.random()*0.35;
+    SFX.play(Math.random()<0.7?"ding":"blip", r.x, r.z);
+    puff(r.x+rand(-.3,.3), r.y+2.6, r.z+rand(-.3,.3), 0xffd98a, 0.1, 1.1, 0.9);
+  }
+};
+
+/* intercept every spawn; generic evening walk-ins may be somebody we know */
+(function(){
+  const _spawn=PUB.spawnCustomer;
+  PUB.spawnCustomer=function(type){
+    const c=_spawn(type);
+    try{ REGULARS.claim(c); }catch(e){}
+    return c;
+  };
+})();
 
 </script>
 </body>

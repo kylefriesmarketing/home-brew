@@ -110,8 +110,32 @@ STORY.onDay = function(day){
       if(!(typeof WILD!=="undefined" && WILD.copeDriveIn("Found that in the back o' the still. Figured yer swill could use help.",5000)))
         STORY.copperSay("Found that in the back o' the still. Figured yer swill could use help.",5000); });
   }
-  /* sabotage era after rank 1 */
-  if(G_STATE.rank>=1 && day>2 && !G_STATE.flags["sab"+day] && Math.random()<0.35){
+  /* Fable pass: one line each time the mountain turns over */
+  if(typeof SEASONS!=="undefined" && day>1 && SEASONS.of(day)!==SEASONS.of(day-1))
+    STORY.at(5, ()=>toast(DATA.SEASON_TURN[SEASONS.of(G_STATE.day)],"gold",5000));
+  /* Fable pass: the morning after a legendary is born, he comes to look at you */
+  if(G_STATE.flags.newLegendDay===day-1){
+    G_STATE.flags.newLegendDay=0;
+    STORY.at(rand(14,30), ()=>{ if(typeof WILD!=="undefined") WILD.copeDriveIn(pick(DATA.COPPERHEAD.legendMorn), 6000); });
+  }
+  /* sabotage era after rank 1 — ⚠️ the undercut PERSISTS until you break it
+     (great beer, see finishSleep); it used to clear itself silently every
+     morning, which is why the flag read as dead */
+  if(G_STATE.flags.undercut){
+    /* ⚠️ he is cheap, not tireless — an unbroken stand folds on its own after
+       three mornings, or the whole sabotage/drive-by flow behind it starves
+       (found by a 30-day soak: one early undercut blocked every raccoon for
+       the rest of the month). Breaking it with quality is still the GOOD exit:
+       fame +6 and a concession. Waiting him out earns nothing. */
+    G_STATE.flags.undercutDays=(G_STATE.flags.undercutDays||0)+1;
+    if(G_STATE.flags.undercutDays>=4){
+      G_STATE.flags.undercut=false; G_STATE.flags.undercutDays=0;
+      STORY.at(10,()=>{ toast("🪧 The stand's gone this morning. Nothing announced. Nothing explained.","",4000);
+        if(typeof WILD!=="undefined") STORY.at(8,()=>WILD.copeDriveIn("Stand's closed. Weren't the money. Got bored. …Weren't the money.",5000)); });
+    } else {
+      STORY.at(8,()=>toast("🪧 Copperhead's stand is still up the road. Cheap travels — but word travels harder.","bad",4200));
+    }
+  } else if(G_STATE.rank>=1 && day>2 && !G_STATE.flags["sab"+day] && Math.random()<0.35){
     G_STATE.flags["sab"+day]=true;
     if(Math.random()<0.5){
       G_STATE.flags.sabRaccoon=true;
@@ -120,7 +144,18 @@ STORY.onDay = function(day){
       G_STATE.flags.undercut=true;
       STORY.at(8,()=>toast("🪧 "+DATA.COPPERHEAD.undercut,"bad",4500));
     }
-  } else G_STATE.flags.undercut=false;
+  } else if(day>2 && Math.random()<0.22){
+    /* Fable pass: drive-by mornings — he watches, seasonally */
+    const P=DATA.COPPERHEAD.driveby;
+    const pool=(typeof SEASONS!=="undefined" && P[SEASONS.current] && Math.random()<0.6)
+      ? P[SEASONS.current] : P.any;
+    STORY.at(rand(15,45), ()=>{ if(typeof WILD!=="undefined") WILD.copeDriveIn(pick(pool), 5000); });
+  }
+  /* the morning after the stand broke, he concedes it — in person */
+  if(G_STATE.flags.undercutBrokeDay===day){
+    G_STATE.flags.undercutBrokeDay=0;
+    STORY.at(rand(20,35), ()=>{ if(typeof WILD!=="undefined") WILD.copeDriveIn(DATA.COPPERHEAD.undercutBroken, 5500); });
+  }
   /* festival mornings (one at a time, biggest first) */
   for(const type of ["world","regional","fair"]){
     const F=FEST[type];
@@ -276,12 +311,17 @@ STORY.festResult = function(res, beer){
 STORY.worldsFinale = function(){
   spawnItem("trophy", 14.9, -4.9, {}).y=2.0;
   for(let i=0;i<60;i++) setTimeout(()=>puff(MAIN.player.x+rand(-8,8), 7+rand(4), MAIN.player.z+rand(-8,8), pick([0x86b04c,0xe8a33d,0xffd98a]), 0.22, -0.5, 3), i*60);
-  STORY.copperSay(DATA.CH2.worldsWin,7000);
   G_STATE.flags.jarLegal=true;
   WINGS.buildJerky();
   WINGS.checkHatUnlocks();
-  STORY.at(3,()=>toast(DATA.CH2.epilogue,"gold",7000));
-  STORY.at(6,()=>UI.credits());
+  /* Fable pass: the campaign's last scene happens ON YOUR PORCH, not from
+     across the crick. He drives in one final time — no honk, for once — and
+     says the thing the whole game was for. Then the truth about the jar. */
+  const drove = (typeof WILD!=="undefined") && WILD.copeDriveIn(DATA.CH2.worldsWin, 7000, 17);
+  if(!drove) STORY.copperSay(DATA.CH2.worldsWin,7000);
+  STORY.at(8.5,()=>STORY.copperSay("That jar I left, first week? Weren't no charity. That was my best batch. Wanted to see what you'd DO with it.",7500));
+  STORY.at(16,()=>toast(DATA.CH2.epilogue,"gold",7000));
+  STORY.at(21,()=>UI.credits());
 };
 
 /* ---------- Hollow Joe hints ---------- */
