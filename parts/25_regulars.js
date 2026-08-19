@@ -89,7 +89,14 @@ REGULARS.claim = function(c){
   let line=null, hold=3400;
   if(s.v===1) line=r.intro;
   else { const bi = s.v>=12?2 : s.v>=7?1 : s.v>=3?0 : -1;
-    if(bi>=0 && s.beat<=bi){ s.beat=bi+1; line=r.beats[bi]; hold=6000; }
+    if(bi>=0 && s.beat<=bi){ s.beat=bi+1; line=r.beats[bi]; hold=6000;
+      /* Odell's third beat names the pup after your best batch — pay it off */
+      if(r.key==="odell" && bi===2){
+        const nm=G_STATE.bestBrewName||"Biscuit II";
+        G_STATE.pupName=nm;
+        setTimeout(()=>toast(`🐕 The pup answers to “${nm}” now. She's got the better end of the name.`,"gold",4600), 8500);
+      }
+    }
     else line=pick(r.greets);
   }
   if(line) setTimeout(()=>{ if(!c.dead) UI.bubbleRig(rig, `<span class="who">${r.name} · ${r.who}</span>“${line}”`, hold); }, rand(1200,2600));
@@ -142,7 +149,9 @@ REGULARS.onDrink = function(c, beer){
 
 /* ---------- June's fiddle — the room holds still for it ---------- */
 REGULARS.startFiddle = function(c){
-  REGULARS.fiddle={t:16, c, note:0};
+  /* she plays a REAL reel now — the banjo brain backs her (see 03_audio) */
+  const tuneLen=(typeof SFX!=="undefined" && SFX.fiddleTune)? SFX.fiddleTune() : 16;
+  REGULARS.fiddle={t:Math.max(16, tuneLen+1), c, note:0};
   /* visual pass: the fiddle is a THING now, tucked at her chin */
   if(typeof makeFiddle==="function" && c.rig){
     const f=makeFiddle();
@@ -187,7 +196,8 @@ REGULARS.update = function(dt){
   r.group.rotation.z=Math.sin(CLAY.t*2.4)*0.04;
   F.note-=dt;
   if(F.note<=0){ F.note=0.45+Math.random()*0.35;
-    SFX.play(Math.random()<0.7?"ding":"blip", r.x, r.z);
+    /* the tune itself is scheduled in SFX.fiddleTune — these are just the
+       notes you can SEE drifting off the strings */
     puff(r.x+rand(-.3,.3), r.y+2.6, r.z+rand(-.3,.3), 0xffd98a, 0.1, 1.1, 0.9);
   }
 };

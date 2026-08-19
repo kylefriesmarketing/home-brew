@@ -636,6 +636,8 @@ BREW.finishBoil = function(blown){
   if(UI) UI.boilEnd();
   BREW.wortLook();
   G_STATE.stats.brews=(G_STATE.stats.brews||0)+1;
+  /* remember your finest work by NAME — Odell's pup answers to it */
+  if(score>(G_STATE.bestBrewScore||0)){ G_STATE.bestBrewScore=score; G_STATE.bestBrewName=beer.name; }
   if(isLegend && !G_STATE.discovered[L.key]){
     G_STATE.discovered[L.key]=true;
     G_STATE.flags.newLegendDay=G_STATE.day;      // he'll come look at you tomorrow

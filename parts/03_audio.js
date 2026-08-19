@@ -130,16 +130,21 @@ const SFX = {
     if(s===0) this.bar++;
     const night=(CYCLE&&CYCLE.phase==="night");
     if(night && this.step%2) return; // sparser at night
+    /* while June's fiddle leads, the banjo holds its melody and the drone
+       rests — bass and washboard keep the floor under her */
+    const fiddleLead = t<this.fiddleLeadUntil;
     // melody pluck (random walk)
-    this._mi = clamp((this._mi??4)+pick([-2,-1,-1,0,1,1,2]),0,this.PENT.length-1);
-    if(Math.random()<0.8) this.pluck(this.PENT[this._mi], 0.32);
-    if(Math.random()<0.18) this.pluck(this.PENT[clamp(this._mi+2,0,this.PENT.length-1)],0.2);
+    if(!fiddleLead){
+      this._mi = clamp((this._mi??4)+pick([-2,-1,-1,0,1,1,2]),0,this.PENT.length-1);
+      if(Math.random()<0.8) this.pluck(this.PENT[this._mi], 0.32);
+      if(Math.random()<0.18) this.pluck(this.PENT[clamp(this._mi+2,0,this.PENT.length-1)],0.2);
+    }
     // bass on beats (rank 1+)
     if(this.rank>=1 && s%2===0) this.pluck(this.ROOTS[this.bar%8]/2, 0.4);
     // washboard (rank 2+)
     if(this.rank>=2 && s%2===1) this.noise(0.04,0.09,5000,1.5);
-    // fiddle drone (rank 3+)
-    if(this.rank>=3 && s===0 && Math.random()<0.5){
+    // fiddle drone (rank 3+) — never under the real fiddle
+    if(this.rank>=3 && s===0 && !fiddleLead && Math.random()<0.5){
       const f=pick([392,440,587]);
       this.tone(f,stepDur*7,"sawtooth",0.05); this.tone(f*1.5,stepDur*7,"sawtooth",0.03);
     }
@@ -207,3 +212,68 @@ const SFX = {
 /* camera shake helper lives here for convenience */
 let _shake=0;
 function shake(n){ _shake=Math.min(1,_shake+n); }
+
+/* ============================================================================
+   JUNE'S FIDDLE — a real voice, not UI pings. Sawtooth through a lowpass with
+   slide-in and late vibrato (the two tells of a bowed string), a whisper of
+   bow noise, double-stop fifths on the long notes. Plays a composed 8-bar
+   old-time reel in G — same key and step clock as the banjo brain above, so
+   the band backs her: while she leads, musicUpdate keeps bass + washboard but
+   holds its own random-walk melody and drone (see fiddleLeadUntil gate).
+   ============================================================================ */
+SFX.fiddleLeadUntil=0;
+SFX.fiddleNote = function(freq, dur, when, vol=0.11){
+  if(!this.ready) return;
+  const t=when;
+  const osc=this.ctx.createOscillator(); osc.type="sawtooth";
+  osc.frequency.setValueAtTime(freq*0.965, t);                 // slide in
+  osc.frequency.exponentialRampToValueAtTime(freq, t+0.045);
+  const vib=this.ctx.createOscillator(); vib.frequency.value=5.4;
+  const vibG=this.ctx.createGain(); vibG.gain.setValueAtTime(0,t);
+  vibG.gain.linearRampToValueAtTime(freq*0.006, t+Math.min(0.14,dur*0.5));  // vibrato arrives late
+  vib.connect(vibG); vibG.connect(osc.frequency);
+  const lp=this.ctx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=2300; lp.Q.value=0.8;
+  const g=this.ctx.createGain();
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol, t+0.025);
+  g.gain.setValueAtTime(vol, t+Math.max(0.03,dur-0.06));
+  g.gain.exponentialRampToValueAtTime(0.001, t+dur);
+  osc.connect(lp); lp.connect(g); g.connect(this.musicG);
+  osc.start(t); osc.stop(t+dur+0.03); vib.start(t); vib.stop(t+dur+0.03);
+  /* a fifth below on held notes — the double-stop */
+  if(dur>0.5){
+    const o2=this.ctx.createOscillator(); o2.type="sawtooth"; o2.frequency.setValueAtTime(freq*2/3, t);
+    const lp2=this.ctx.createBiquadFilter(); lp2.type="lowpass"; lp2.frequency.value=1800;
+    const g2=this.ctx.createGain();
+    g2.gain.setValueAtTime(0.0001,t); g2.gain.exponentialRampToValueAtTime(vol*0.4, t+0.03);
+    g2.gain.exponentialRampToValueAtTime(0.001, t+dur);
+    o2.connect(lp2); lp2.connect(g2); g2.connect(this.musicG);
+    o2.start(t); o2.stop(t+dur+0.03);
+  }
+};
+/* the reel: A strain low and rocking, B strain high and bright — [freq, 8ths] */
+SFX.REEL=[
+  [392,1],[494,1],[587,1],[494,1],[659,1],[587,1],[494,1],[440,1],
+  [392,1],[494,1],[587,1],[494,1],[440,2],[330,2],
+  [392,1],[494,1],[587,1],[494,1],[659,1],[587,1],[494,1],[440,1],
+  [587,1],[523,1],[494,1],[440,1],[392,4],
+  [784,2],[659,1],[587,1],[784,2],[659,1],[587,1],
+  [659,1],[587,1],[523,1],[494,1],[440,2],[587,2],
+  [784,2],[659,1],[587,1],[659,1],[587,1],[523,1],[494,1],
+  [587,1],[523,1],[494,1],[440,1],[392,4],
+];
+SFX.fiddleTune = function(){
+  if(!this.ready) return 16;
+  const stepDur=60/this.tempo/2;
+  let t=Math.max(this.ctx.currentTime+0.12, this.nextStep);   // fall in with the band
+  const t0=t;
+  for(const [f,len] of this.REEL){
+    const d=len*stepDur;
+    this.fiddleNote(f, d*0.92, t);
+    /* bow whisper rides the phrase starts */
+    if(Math.random()<0.3) this.noise(d*0.8, 0.016, 3200, 0.7);
+    t+=d;
+  }
+  this.fiddleLeadUntil=t;
+  return t-t0;
+};

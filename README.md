@@ -1,9 +1,36 @@
-# HOME BREW — dev notes (v2.2 — the check & the visual pass)
+# HOME BREW — dev notes (v2.3 — June plays for real)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v2.3 — **JUNE PLAYS FOR REAL** (audio pass)
+
+Her fiddle moment played UI pings ("ding"/"blip"). The game already had a
+rank-layered jug band (`musicUpdate` — Karplus-Strong banjo, bass at rank 1,
+washboard at 2, drone at 3, jaw harp at 4); what was missing was HER.
+
+- 🎻 **A real fiddle voice** (`SFX.fiddleNote`): sawtooth through a lowpass
+  with a 45ms slide-in and vibrato that arrives LATE (the two tells of a bowed
+  string), a whisper of bow noise, and a double-stop fifth under held notes.
+- 🎼 **A composed 8-bar old-time reel in G** (`SFX.REEL` — 51 notes, 64
+  eighths, exactly 20s at the band's tempo 96): A strain low and rocking, B
+  strain high and bright, scheduled against the SAME step clock as the banjo
+  so she falls in with the band.
+- 🤝 **The band yields**: while `fiddleLeadUntil` is ahead of the clock, the
+  banjo holds its random-walk melody and the rank-3 drone rests — bass and
+  washboard keep the floor under her. Measured: 0 melody plucks during her
+  lead, 36 after it ends.
+- 🐕 **The pup gets her name**: Odell's third beat says he named her after
+  your beer — now the game keeps score. `G_STATE.bestBrewName` (highest score
+  ever brewed) is stamped at finishBoil; when the beat lands, the pup answers
+  to it forever, in the save.
+
+Verified: 51 notes / 111 oscillators scheduled, first phrase G-B-D-B-E-D at
+the slide-in pitches, tune length exact, mute governs (master gain 0), June's
+moment runs tune+1s with the prop attached, save round-trips pupName,
+0 errors, ~4.4ms/frame.
 
 ## New in v2.2 — **THE CHECK + THE VISUAL PASS**
 
