@@ -35,7 +35,15 @@ const LATCH = { list:[], saved:[], on:true };
 function latchCollect(){
   const L=LATCH.list; L.length=0;
   const add=o=>{ if(o && o.isObject3D) L.push(o); };
-  if(typeof MAIN!=="undefined" && MAIN.player) add(MAIN.player.group);
+  /* ⚠️ PLAYTEST (Kyle): "the movement of the character is clunky."
+     THE PLAYER IS DELIBERATELY NOT LATCHED. This list holds each object's root
+     transform on the 12fps clock — for the character you steer, that froze his
+     WORLD POSITION 12 times a second while the camera tracked him smoothly at
+     60, so he visibly juddered against the ground and lagged your input.
+     The stop-motion read does NOT come from this: the limbs step because
+     animatePerson quantises walkPhase to CLAY.FPS. Freeing the root keeps the
+     puppet stepping while the movement stays responsive.
+     ⚠️ do not "fix" this by adding MAIN.player.group back. */
   if(typeof PUB!=="undefined") for(const c of PUB.customers) add(c.rig && c.rig.group);
   if(typeof ITEMS!=="undefined") for(const it of ITEMS.list) add(it.mesh);
   if(typeof FORK!=="undefined") add(FORK.rig);
@@ -200,9 +208,19 @@ function clayBoilSurface(){
   if(!CLAYTEX.normal || !CLAY.tick) return;
   const f=CLAY.frame;
   const hash=(n)=>{ const s=Math.sin(n*127.1)*43758.5453; return s-Math.floor(s); };
-  const ox=(hash(f)-0.5)*0.03, oy=(hash(f+31.7)-0.5)*0.03, rot=(hash(f+77.3)-0.5)*0.12;
-  CLAYTEX.normal.offset.set(ox,oy); CLAYTEX.normal.rotation=rot;
-  CLAYTEX.rough.offset.set(ox,oy);  CLAYTEX.rough.rotation=rot;
+  /* ⚠️ PLAYTEST (Kyle): "the texture for the floor and walls is shaking."
+     Correct, and it was this. These two textures are SHARED by every clay
+     material in the game, so boiling them boils the ground and the walls too —
+     and on a big surface the ROTATION term swings the far corners a long way
+     each held frame. That reads as an earthquake, not as thumbprints being
+     re-sculpted. Rotation is gone and the offset is a fifth of what it was:
+     still alive in close-up, invisible on a wall.
+     ⚠️ do NOT re-add rotation here — it cannot be made small enough to be safe
+     on a large plane. If a stronger boil is ever wanted, it needs its OWN
+     texture pair used only by small props. */
+  const ox=(hash(f)-0.5)*0.006, oy=(hash(f+31.7)-0.5)*0.006;
+  CLAYTEX.normal.offset.set(ox,oy); CLAYTEX.normal.rotation=0;
+  CLAYTEX.rough.offset.set(ox,oy);  CLAYTEX.rough.rotation=0;
 }
 
 const _matCache = {};

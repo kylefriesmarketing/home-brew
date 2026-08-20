@@ -154,7 +154,7 @@ kbd{background:#3a3128;color:#ffd98a;border-radius:4px;border:1px solid #6b4a2f;
     <div class="credit">a Dirty Boy Devs joint · The Room</div>
   </div>
   <div class="bigfade" id="fade"></div>
-  <div id="verchip">home brew v2.3</div>
+  <div id="verchip">home brew v2.4</div>
 </div>
 <script>
 (function(){
@@ -53681,13 +53681,29 @@ const SFX = {
     try{
       const AC=window.AudioContext||window.webkitAudioContext;
       this.ctx=new AC();
-      this.master=this.ctx.createGain(); this.master.gain.value=0.5; this.master.connect(this.ctx.destination);
-      this.musicG=this.ctx.createGain(); this.musicG.gain.value=0.4; this.musicG.connect(this.master);
-      this.ambG=this.ctx.createGain(); this.ambG.gain.value=0.32; this.ambG.connect(this.master);
+      /* ⚠️ PLAYTEST (Kyle): "screeching and awful, not peaceful nature."
+         Everything was routed raw to the destination, so every bandpass
+         squeal and clicky envelope hit the ear at full brightness. The whole
+         bus now runs through a HIGH-SHELF CUT (−13dB above 3.2kHz — where
+         "piercing" lives) then a gentle limiter, so nothing can spike.
+         This tames every sound in the game at once. */
+      this.master=this.ctx.createGain(); this.master.gain.value=0.42;
+      const shelf=this.ctx.createBiquadFilter();
+      shelf.type="highshelf"; shelf.frequency.value=3200; shelf.gain.value=-13;
+      const air=this.ctx.createBiquadFilter();       // second stage: nothing above 9k
+      air.type="lowpass"; air.frequency.value=9000; air.Q.value=0.5;
+      const comp=this.ctx.createDynamicsCompressor();
+      comp.threshold.value=-20; comp.knee.value=26; comp.ratio.value=4;
+      comp.attack.value=0.006; comp.release.value=0.22;
+      this.master.connect(shelf); shelf.connect(air); air.connect(comp);
+      comp.connect(this.ctx.destination);
+      this.shelf=shelf; this.air=air; this.comp=comp;   // kept for tuning/verification
+      this.musicG=this.ctx.createGain(); this.musicG.gain.value=0.34; this.musicG.connect(this.master);
+      this.ambG=this.ctx.createGain(); this.ambG.gain.value=0.3; this.ambG.connect(this.master);
       this.ready=true;
     }catch(e){ /* no audio env */ }
   },
-  toggleMute(){ this.muted=!this.muted; if(this.master) this.master.gain.value=this.muted?0:0.5; return this.muted; },
+  toggleMute(){ this.muted=!this.muted; if(this.master) this.master.gain.value=this.muted?0:0.42; return this.muted; },
 
   _out(x,z){
     if(!this.ready) return null;
@@ -53712,7 +53728,14 @@ const SFX = {
     const osc=this.ctx.createOscillator(); osc.type=type; osc.frequency.setValueAtTime(freq,t);
     if(bend) osc.frequency.exponentialRampToValueAtTime(Math.max(20,freq+bend), t+dur);
     const g=this.ctx.createGain();
-    g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    /* ⚠️ every tone in the game used to START AT FULL VOLUME on the same
+       sample — an instant onset is a CLICK, and hundreds of them a minute is
+       most of what "screeching" was. A 12ms attack costs nothing and removes
+       the pop from every sound at once. */
+    const atk=Math.min(0.012, dur*0.3);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol,t+atk);
+    g.gain.exponentialRampToValueAtTime(0.001,t+dur);
     osc.connect(g); g.connect(out.in);
     osc.start(t); osc.stop(t+dur+0.02);
   },
@@ -53726,7 +53749,11 @@ const SFX = {
     const src=this.ctx.createBufferSource(); src.buffer=buf;
     const f=this.ctx.createBiquadFilter(); f.type="bandpass"; f.frequency.setValueAtTime(freq,t); f.Q.value=q;
     if(bend) f.frequency.exponentialRampToValueAtTime(Math.max(40,freq+bend), t+dur);
-    const g=this.ctx.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    const g=this.ctx.createGain();
+    const atk=Math.min(0.014, dur*0.3);                     // no instant onsets
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol,t+atk);
+    g.gain.exponentialRampToValueAtTime(0.001,t+dur);
     src.connect(f); f.connect(g); g.connect(out.in);
     src.start(t); src.stop(t+dur);
   },
@@ -53791,9 +53818,17 @@ const SFX = {
   PENT:[196,220,247,294,330,392,440,494,587,659,784],
   ROOTS:[196,196,261.6,196,146.8,196,261.6,146.8],
   bar:0,
+  /* ⚠️ PLAYTEST: the jug band used to play FOREVER — ~3 Karplus-Strong plucks
+     a second, every second of every day, feedback 0.93 and a bright lowpass.
+     Relentless, and the opposite of "peaceful nature". The band now plays only
+     when there is a REASON: June's fiddle lead, which it backs. Otherwise the
+     mountain's own bed carries the room. (`musicOn` can turn the band back on
+     for a special moment; nothing sets it today.) */
+  musicOn:false, fiddleLeadUntil:0,
   musicUpdate(dt){
     if(!this.ready || this.muted) return;
     const t=this.ctx.currentTime;
+    if(!this.musicOn && t>=this.fiddleLeadUntil) return;
     if(t<this.nextStep) return;
     const stepDur=60/this.tempo/2; // 8ths
     this.nextStep=Math.max(t, this.nextStep)+stepDur;
@@ -53848,37 +53883,89 @@ const SFX = {
     if(this.ambT>0) return;
     const ph=CYCLE?CYCLE.phase:"morning";
     const season=(typeof SEASONS!=="undefined")?SEASONS.current:"fall";
-    if(ph==="morning"){ // birdsong (thin and hardy in winter)
-      const f=rand(1800,3200);
-      const reps=season==="winter"?[0]:[0,80,160];
-      reps.forEach((ms,i)=>setTimeout(()=>this.tone(f+i*rand(-200,300),0.09,"sine",season==="winter"?0.07:0.12),ms));
-      this.ambT=season==="winter"?rand(3,7):rand(1.2,3.5);
+    /* ⚠️ PLAYTEST REWRITE. Every one of these lived in the most piercing band
+       of human hearing: cicadas were bandpass noise at 5200Hz with Q=3 (that
+       IS a screech), crickets 4200Hz, peepers 2700Hz, birds up to 3200Hz in
+       90ms stabs. All moved DOWN an octave or more, given length and softer
+       gain, and the 5.2kHz cicada is deleted outright. The continuous wind and
+       water bed (startNatureBed) now carries the soundscape; these are just
+       occasional voices on top of it. */
+    if(ph==="morning"){                            // birdsong: falling, warm, sparse
+      const f=rand(900,1500);
+      const reps=season==="winter"?[0]:[0,150];
+      reps.forEach((ms,i)=>setTimeout(()=>this.tone(f+i*rand(-120,160),0.22,"sine",
+        season==="winter"?0.045:0.06,undefined,undefined,-180),ms));
+      this.ambT=season==="winter"?rand(5,10):rand(3,7);
     } else if(ph==="afternoon"){
-      if(season==="summer"){ this.noise(1.1,0.05,5200,3);
-      } else if(Math.random()<0.5){ const f=rand(1600,2600); this.tone(f,0.12,"sine",0.08); }
-      this.ambT=rand(2,5);
+      if(Math.random()<0.5){ const f=rand(800,1400); this.tone(f,0.26,"sine",0.05,undefined,undefined,-140); }
+      this.ambT=rand(4,9);
     } else {
       if(season==="winter"){                       // wind, and an owl with opinions
-        this.noise(rand(1.2,2.2),0.09,300,0.5,undefined,undefined,-120);
-        if(Math.random()<0.12) setTimeout(()=>this.tone(340,0.5,"triangle",0.12,undefined,undefined,-40),400);
-        this.ambT=rand(1.6,3.2);
-      } else if(season==="spring"){                // peepers
-        const n=4+irand(4);
-        for(let i=0;i<n;i++) setTimeout(()=>this.tone(2700+rand(-200,300),0.06,"sine",0.08),i*70);
-        this.ambT=rand(0.6,1.2);
-      } else if(season==="summer"){                // cicadas saw away
-        this.noise(rand(0.8,1.4),0.06,5200,3);
-        if(Math.random()<0.08) setTimeout(()=>this.tone(340,0.5,"triangle",0.11,undefined,undefined,-40),400);
-        this.ambT=rand(1,2);
-      } else {                                     // fall crickets (the original)
-        const n=3+irand(3);
-        for(let i=0;i<n;i++) setTimeout(()=>this.tone(4200+rand(-300,300),0.05,"sine",0.07),i*90);
-        if(ph==="night"&&Math.random()<0.1) setTimeout(()=>{ this.tone(340,0.5,"triangle",0.12,undefined,undefined,-40); },400);
-        this.ambT=rand(0.8,1.6);
+        this.noise(rand(1.6,2.6),0.055,220,0.4,undefined,undefined,-90);
+        if(Math.random()<0.12) setTimeout(()=>this.tone(300,0.7,"sine",0.07,undefined,undefined,-40),400);
+        this.ambT=rand(3,6);
+      } else if(season==="spring"){                // peepers, an octave down
+        const n=2+irand(3);
+        for(let i=0;i<n;i++) setTimeout(()=>this.tone(1350+rand(-90,120),0.13,"sine",0.04),i*150);
+        this.ambT=rand(2,4);
+      } else {                                     // crickets — summer & fall
+        const n=2+irand(2);
+        for(let i=0;i<n;i++) setTimeout(()=>this.tone(2100+rand(-140,160),0.1,"sine",0.035),i*170);
+        if(ph==="night"&&Math.random()<0.1) setTimeout(()=>this.tone(300,0.7,"sine",0.07,undefined,undefined,-40),400);
+        this.ambT=rand(1.8,3.6);
       }
     }
   },
-  update(dt){ this.musicUpdate(dt); this.ambUpdate(dt); },
+
+  /* ---------- THE BED: continuous, soft, always there ----------
+     Discrete blips can never sound like a place. A quiet wind layer plus the
+     crick running is what makes a mountain feel like a mountain — and it gives
+     the ear something gentle to sit on instead of silence punctuated by pings. */
+  bedNodes:null,
+  startNatureBed(){
+    if(!this.ready || this.bedNodes) return;
+    const ctx=this.ctx, t=ctx.currentTime;
+    const mk=(cutoff, q, gain, lfoRate, lfoDepth)=>{
+      const len=(4*ctx.sampleRate)|0;
+      const buf=ctx.createBuffer(1,len,ctx.sampleRate);
+      const d=buf.getChannelData(0);
+      /* brown-ish noise: integrated white, far softer than raw white noise */
+      let last=0;
+      for(let i=0;i<len;i++){ const w=Math.random()*2-1; last=(last+0.02*w)/1.02; d[i]=last*3.5; }
+      const src=ctx.createBufferSource(); src.buffer=buf; src.loop=true;
+      const f=ctx.createBiquadFilter(); f.type="lowpass"; f.frequency.value=cutoff; f.Q.value=q;
+      const g=ctx.createGain(); g.gain.value=gain;
+      /* slow swell so the wind breathes instead of hissing flat */
+      const lfo=ctx.createOscillator(); lfo.frequency.value=lfoRate;
+      const lg=ctx.createGain(); lg.gain.value=lfoDepth;
+      lfo.connect(lg); lg.connect(g.gain);
+      src.connect(f); f.connect(g); g.connect(this.ambG);
+      src.start(t); lfo.start(t);
+      return {src,g,lfo,f};
+    };
+    this.bedNodes={
+      wind: mk(420, 0.6, 0.10, 0.055, 0.055),   // the ridge
+      leaves: mk(1500, 0.5, 0.022, 0.09, 0.014), // treeline rustle
+      crick: mk(950, 1.4, 0.020, 0.13, 0.008),   // water over stones
+    };
+  },
+  /* the bed leans with weather and time — louder wind in a storm, hushed at night */
+  bedUpdate(){
+    const B=this.bedNodes; if(!B) return;
+    const storm=(typeof G_STATE!=="undefined" && G_STATE && G_STATE.weather==="storm");
+    const night=(typeof CYCLE!=="undefined" && CYCLE.phase==="night");
+    const w=storm?0.26:(night?0.07:0.10);
+    const t=this.ctx.currentTime;
+    B.wind.g.gain.setTargetAtTime(w, t, 2.5);
+    B.wind.f.frequency.setTargetAtTime(storm?700:420, t, 2.5);
+    B.leaves.g.gain.setTargetAtTime(storm?0.05:0.022, t, 2.5);
+  },
+  bedT:0,
+  update(dt){
+    this.musicUpdate(dt); this.ambUpdate(dt);
+    if(this.ready && !this.bedNodes) this.startNatureBed();
+    this.bedT-=dt; if(this.bedT<=0){ this.bedT=1.5; this.bedUpdate(); }
+  },
 };
 
 /* camera shake helper lives here for convenience */
@@ -53989,7 +54076,15 @@ const LATCH = { list:[], saved:[], on:true };
 function latchCollect(){
   const L=LATCH.list; L.length=0;
   const add=o=>{ if(o && o.isObject3D) L.push(o); };
-  if(typeof MAIN!=="undefined" && MAIN.player) add(MAIN.player.group);
+  /* ⚠️ PLAYTEST (Kyle): "the movement of the character is clunky."
+     THE PLAYER IS DELIBERATELY NOT LATCHED. This list holds each object's root
+     transform on the 12fps clock — for the character you steer, that froze his
+     WORLD POSITION 12 times a second while the camera tracked him smoothly at
+     60, so he visibly juddered against the ground and lagged your input.
+     The stop-motion read does NOT come from this: the limbs step because
+     animatePerson quantises walkPhase to CLAY.FPS. Freeing the root keeps the
+     puppet stepping while the movement stays responsive.
+     ⚠️ do not "fix" this by adding MAIN.player.group back. */
   if(typeof PUB!=="undefined") for(const c of PUB.customers) add(c.rig && c.rig.group);
   if(typeof ITEMS!=="undefined") for(const it of ITEMS.list) add(it.mesh);
   if(typeof FORK!=="undefined") add(FORK.rig);
@@ -54154,9 +54249,19 @@ function clayBoilSurface(){
   if(!CLAYTEX.normal || !CLAY.tick) return;
   const f=CLAY.frame;
   const hash=(n)=>{ const s=Math.sin(n*127.1)*43758.5453; return s-Math.floor(s); };
-  const ox=(hash(f)-0.5)*0.03, oy=(hash(f+31.7)-0.5)*0.03, rot=(hash(f+77.3)-0.5)*0.12;
-  CLAYTEX.normal.offset.set(ox,oy); CLAYTEX.normal.rotation=rot;
-  CLAYTEX.rough.offset.set(ox,oy);  CLAYTEX.rough.rotation=rot;
+  /* ⚠️ PLAYTEST (Kyle): "the texture for the floor and walls is shaking."
+     Correct, and it was this. These two textures are SHARED by every clay
+     material in the game, so boiling them boils the ground and the walls too —
+     and on a big surface the ROTATION term swings the far corners a long way
+     each held frame. That reads as an earthquake, not as thumbprints being
+     re-sculpted. Rotation is gone and the offset is a fifth of what it was:
+     still alive in close-up, invisible on a wall.
+     ⚠️ do NOT re-add rotation here — it cannot be made small enough to be safe
+     on a large plane. If a stronger boil is ever wanted, it needs its OWN
+     texture pair used only by small props. */
+  const ox=(hash(f)-0.5)*0.006, oy=(hash(f+31.7)-0.5)*0.006;
+  CLAYTEX.normal.offset.set(ox,oy); CLAYTEX.normal.rotation=0;
+  CLAYTEX.rough.offset.set(ox,oy);  CLAYTEX.rough.rotation=0;
 }
 
 const _matCache = {};
@@ -55213,14 +55318,24 @@ function animatePerson(rig, dt){
   const sp=rig.speedNow;
   rig.walkPhase += sp*dt*2.6;
   const t=CLAY.t, wp=Math.floor(rig.walkPhase*CLAY.FPS)/CLAY.FPS; // quantized
-  const swing=Math.sin(wp*6)* clamp(sp/5,0,1) * 0.7;
-  const bob=Math.abs(Math.sin(wp*6))* clamp(sp/5,0,1) * 0.12;
+  /* ⚠️⚠️ PLAYTEST ROOT CAUSE (Kyle: "movement is clunky", "arms glitch out").
+     This was `Math.sin(wp*6)`. walkPhase advances at sp*2.6 per second, so at
+     a walking speed of 3.5 the sine argument advanced ~55 rad/s — a full limb
+     swing every ~7 frames, about 8.7 CYCLES PER SECOND. The legs and arms
+     weren't walking, they were BUZZING, and the 12fps quantisation was
+     inert because the phase outran it (floor() advanced ~2 units every frame).
+     At ×0.64 a stride is ~1.5 cycles/sec — a real walk — and the stop-motion
+     stepping actually reads, because the phase now moves slower than the clock.
+     ⚠️ all three consumers below must share this one phase. */
+  const cyc=wp*0.64;
+  const swing=Math.sin(cyc)* clamp(sp/5,0,1) * 0.7;
+  const bob=Math.abs(Math.sin(cyc))* clamp(sp/5,0,1) * 0.12;
 
   p.legL.rotation.x=swing; p.legR.rotation.x=-swing;
   /* FEET USED TO SKATE — boots only translated in Z, so they slid along the
      ground like the character was on ice. A real step LIFTS and the ankle
      rolls: the foot swinging FORWARD rises, the planted one stays down. */
-  const gait=clamp(sp/5,0,1), sw=Math.sin(wp*6);
+  const gait=clamp(sp/5,0,1), sw=Math.sin(cyc);
   p.bootL.position.z=0.05+sw*0.14*gait;
   p.bootR.position.z=0.05-sw*0.14*gait;
   const liftL=Math.max(0, sw)*0.11*gait, liftR=Math.max(0,-sw)*0.11*gait;
@@ -55235,11 +55350,29 @@ function animatePerson(rig, dt){
   const armSwing=swing*0.8*(1-carry);
   /* ANTICIPATION + OVERSHOOT — arms lag the body by a beat instead of snapping
      to a target. Every motion in here used to be a direct sin(). */
-  rig._armT = damp(rig._armT??0, -armSwing - carry*(1.4+heavy*0.3), 14, dt);
-  const over = (rig._armT - (rig._armP??rig._armT)) * 2.2;    // velocity → overshoot
-  rig._armP = rig._armT;
-  p.armL.rotation.x = rig._armT + over;
-  p.armR.rotation.x = (armSwing - carry*(1.4+heavy*0.3)) + over*0.6;
+  /* ⚠️ PLAYTEST (Kyle): "the arms glitch out." Two real bugs here:
+     1. ASYMMETRY — the left arm was damped toward its target while the right
+        was driven by the RAW swing, so one arm lagged and the other snapped.
+        Two different animation systems on one body reads as broken.
+     2. The overshoot term was a per-FRAME delta ×2.2, not a velocity. It is
+        framerate-dependent and it SPIKES whenever the walk speed changes
+        (starting, stopping, bumping a wall) — a visible flail.
+     Both arms now run the same damped spring toward mirrored targets, and the
+     overshoot is derived from the damped velocity, divided by dt to be a real
+     rate, and clamped so it can never fling. */
+  const prev = rig._armS ?? -armSwing;
+  rig._armS = damp(prev, -armSwing, 14, dt);                  // ONE spring, for the swing
+  /* ⚠️ the overshoot must be SMOOTHED, not used raw. The swing target is
+     quantised to 12fps (that's the stop-motion), so its velocity is spiky by
+     construction — feeding that straight in made the arm jump 0.6 rad (34°) in
+     a single frame, measured. Damping the overshoot keeps the flourish and
+     drops the spike to a fraction of that. */
+  const vel = dt>0 ? (rig._armS-prev)/dt : 0;
+  rig._over = damp(rig._over??0, clamp(vel*0.05, -0.16, 0.16), 9, dt);
+  const over = rig._over;
+  const carryPull = carry*(1.4+heavy*0.3);                    // carrying pulls BOTH arms in
+  p.armL.rotation.x =  rig._armS + over - carryPull;
+  p.armR.rotation.x = -rig._armS - over - carryPull;
   p.armL.rotation.z= 0.12+carry*0.25; p.armR.rotation.z=-0.12-carry*0.25;
 
   p.body.position.y=rig.baseBodyY+bob - heavy*0.1;
@@ -55542,12 +55675,20 @@ ITEMS.update = function(dt){
         const fwd=Math.hypot(it.x-rig.x, it.z-rig.z);
         const dy=it.y-sp.y;
         const pitch=-Math.atan2(Math.max(fwd,0.01), -dy);
-        pa.armL.rotation.x=damp(pa.armL.rotation.x, pitch, 16, dt);
-        pa.armR.rotation.x=damp(pa.armR.rotation.x, pitch, 16, dt);
-        /* hands converge on the cargo's width */
+        /* ⚠️ PLAYTEST (Kyle): "the arms glitch out" — half of it was HERE.
+           This used to damp FROM `pa.armL.rotation.x`, the value animatePerson
+           had just written from its own walk-swing spring. Two systems owning
+           one property: the IK could never converge (it only ever moved a
+           fraction toward the target before being overwritten) and the arm
+           vibrated between the swing pose and the carry pose every frame.
+           The IK now keeps its OWN damped state and ASSIGNS — one authority
+           for the value, so it actually reaches the cargo and holds still. */
         const grip=0.1+ (it.r||0.3)*0.35;
-        pa.armL.rotation.z=damp(pa.armL.rotation.z,  grip, 14, dt);
-        pa.armR.rotation.z=damp(pa.armR.rotation.z, -grip, 14, dt);
+        rig._ikPitch = damp(rig._ikPitch ?? pitch, pitch, 16, dt);
+        rig._ikGrip  = damp(rig._ikGrip  ?? grip,  grip,  14, dt);
+        pa.armL.rotation.x=pa.armR.rotation.x=rig._ikPitch;
+        pa.armL.rotation.z= rig._ikGrip;
+        pa.armR.rotation.z=-rig._ikGrip;
       }
       continue;
     }

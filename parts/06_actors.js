@@ -116,14 +116,24 @@ function animatePerson(rig, dt){
   const sp=rig.speedNow;
   rig.walkPhase += sp*dt*2.6;
   const t=CLAY.t, wp=Math.floor(rig.walkPhase*CLAY.FPS)/CLAY.FPS; // quantized
-  const swing=Math.sin(wp*6)* clamp(sp/5,0,1) * 0.7;
-  const bob=Math.abs(Math.sin(wp*6))* clamp(sp/5,0,1) * 0.12;
+  /* ⚠️⚠️ PLAYTEST ROOT CAUSE (Kyle: "movement is clunky", "arms glitch out").
+     This was `Math.sin(wp*6)`. walkPhase advances at sp*2.6 per second, so at
+     a walking speed of 3.5 the sine argument advanced ~55 rad/s — a full limb
+     swing every ~7 frames, about 8.7 CYCLES PER SECOND. The legs and arms
+     weren't walking, they were BUZZING, and the 12fps quantisation was
+     inert because the phase outran it (floor() advanced ~2 units every frame).
+     At ×0.64 a stride is ~1.5 cycles/sec — a real walk — and the stop-motion
+     stepping actually reads, because the phase now moves slower than the clock.
+     ⚠️ all three consumers below must share this one phase. */
+  const cyc=wp*0.64;
+  const swing=Math.sin(cyc)* clamp(sp/5,0,1) * 0.7;
+  const bob=Math.abs(Math.sin(cyc))* clamp(sp/5,0,1) * 0.12;
 
   p.legL.rotation.x=swing; p.legR.rotation.x=-swing;
   /* FEET USED TO SKATE — boots only translated in Z, so they slid along the
      ground like the character was on ice. A real step LIFTS and the ankle
      rolls: the foot swinging FORWARD rises, the planted one stays down. */
-  const gait=clamp(sp/5,0,1), sw=Math.sin(wp*6);
+  const gait=clamp(sp/5,0,1), sw=Math.sin(cyc);
   p.bootL.position.z=0.05+sw*0.14*gait;
   p.bootR.position.z=0.05-sw*0.14*gait;
   const liftL=Math.max(0, sw)*0.11*gait, liftR=Math.max(0,-sw)*0.11*gait;
@@ -138,11 +148,29 @@ function animatePerson(rig, dt){
   const armSwing=swing*0.8*(1-carry);
   /* ANTICIPATION + OVERSHOOT — arms lag the body by a beat instead of snapping
      to a target. Every motion in here used to be a direct sin(). */
-  rig._armT = damp(rig._armT??0, -armSwing - carry*(1.4+heavy*0.3), 14, dt);
-  const over = (rig._armT - (rig._armP??rig._armT)) * 2.2;    // velocity → overshoot
-  rig._armP = rig._armT;
-  p.armL.rotation.x = rig._armT + over;
-  p.armR.rotation.x = (armSwing - carry*(1.4+heavy*0.3)) + over*0.6;
+  /* ⚠️ PLAYTEST (Kyle): "the arms glitch out." Two real bugs here:
+     1. ASYMMETRY — the left arm was damped toward its target while the right
+        was driven by the RAW swing, so one arm lagged and the other snapped.
+        Two different animation systems on one body reads as broken.
+     2. The overshoot term was a per-FRAME delta ×2.2, not a velocity. It is
+        framerate-dependent and it SPIKES whenever the walk speed changes
+        (starting, stopping, bumping a wall) — a visible flail.
+     Both arms now run the same damped spring toward mirrored targets, and the
+     overshoot is derived from the damped velocity, divided by dt to be a real
+     rate, and clamped so it can never fling. */
+  const prev = rig._armS ?? -armSwing;
+  rig._armS = damp(prev, -armSwing, 14, dt);                  // ONE spring, for the swing
+  /* ⚠️ the overshoot must be SMOOTHED, not used raw. The swing target is
+     quantised to 12fps (that's the stop-motion), so its velocity is spiky by
+     construction — feeding that straight in made the arm jump 0.6 rad (34°) in
+     a single frame, measured. Damping the overshoot keeps the flourish and
+     drops the spike to a fraction of that. */
+  const vel = dt>0 ? (rig._armS-prev)/dt : 0;
+  rig._over = damp(rig._over??0, clamp(vel*0.05, -0.16, 0.16), 9, dt);
+  const over = rig._over;
+  const carryPull = carry*(1.4+heavy*0.3);                    // carrying pulls BOTH arms in
+  p.armL.rotation.x =  rig._armS + over - carryPull;
+  p.armR.rotation.x = -rig._armS - over - carryPull;
   p.armL.rotation.z= 0.12+carry*0.25; p.armR.rotation.z=-0.12-carry*0.25;
 
   p.body.position.y=rig.baseBodyY+bob - heavy*0.1;

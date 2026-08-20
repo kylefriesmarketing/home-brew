@@ -9,13 +9,29 @@ const SFX = {
     try{
       const AC=window.AudioContext||window.webkitAudioContext;
       this.ctx=new AC();
-      this.master=this.ctx.createGain(); this.master.gain.value=0.5; this.master.connect(this.ctx.destination);
-      this.musicG=this.ctx.createGain(); this.musicG.gain.value=0.4; this.musicG.connect(this.master);
-      this.ambG=this.ctx.createGain(); this.ambG.gain.value=0.32; this.ambG.connect(this.master);
+      /* ⚠️ PLAYTEST (Kyle): "screeching and awful, not peaceful nature."
+         Everything was routed raw to the destination, so every bandpass
+         squeal and clicky envelope hit the ear at full brightness. The whole
+         bus now runs through a HIGH-SHELF CUT (−13dB above 3.2kHz — where
+         "piercing" lives) then a gentle limiter, so nothing can spike.
+         This tames every sound in the game at once. */
+      this.master=this.ctx.createGain(); this.master.gain.value=0.42;
+      const shelf=this.ctx.createBiquadFilter();
+      shelf.type="highshelf"; shelf.frequency.value=3200; shelf.gain.value=-13;
+      const air=this.ctx.createBiquadFilter();       // second stage: nothing above 9k
+      air.type="lowpass"; air.frequency.value=9000; air.Q.value=0.5;
+      const comp=this.ctx.createDynamicsCompressor();
+      comp.threshold.value=-20; comp.knee.value=26; comp.ratio.value=4;
+      comp.attack.value=0.006; comp.release.value=0.22;
+      this.master.connect(shelf); shelf.connect(air); air.connect(comp);
+      comp.connect(this.ctx.destination);
+      this.shelf=shelf; this.air=air; this.comp=comp;   // kept for tuning/verification
+      this.musicG=this.ctx.createGain(); this.musicG.gain.value=0.34; this.musicG.connect(this.master);
+      this.ambG=this.ctx.createGain(); this.ambG.gain.value=0.3; this.ambG.connect(this.master);
       this.ready=true;
     }catch(e){ /* no audio env */ }
   },
-  toggleMute(){ this.muted=!this.muted; if(this.master) this.master.gain.value=this.muted?0:0.5; return this.muted; },
+  toggleMute(){ this.muted=!this.muted; if(this.master) this.master.gain.value=this.muted?0:0.42; return this.muted; },
 
   _out(x,z){
     if(!this.ready) return null;
@@ -40,7 +56,14 @@ const SFX = {
     const osc=this.ctx.createOscillator(); osc.type=type; osc.frequency.setValueAtTime(freq,t);
     if(bend) osc.frequency.exponentialRampToValueAtTime(Math.max(20,freq+bend), t+dur);
     const g=this.ctx.createGain();
-    g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    /* ⚠️ every tone in the game used to START AT FULL VOLUME on the same
+       sample — an instant onset is a CLICK, and hundreds of them a minute is
+       most of what "screeching" was. A 12ms attack costs nothing and removes
+       the pop from every sound at once. */
+    const atk=Math.min(0.012, dur*0.3);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol,t+atk);
+    g.gain.exponentialRampToValueAtTime(0.001,t+dur);
     osc.connect(g); g.connect(out.in);
     osc.start(t); osc.stop(t+dur+0.02);
   },
@@ -54,7 +77,11 @@ const SFX = {
     const src=this.ctx.createBufferSource(); src.buffer=buf;
     const f=this.ctx.createBiquadFilter(); f.type="bandpass"; f.frequency.setValueAtTime(freq,t); f.Q.value=q;
     if(bend) f.frequency.exponentialRampToValueAtTime(Math.max(40,freq+bend), t+dur);
-    const g=this.ctx.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    const g=this.ctx.createGain();
+    const atk=Math.min(0.014, dur*0.3);                     // no instant onsets
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol,t+atk);
+    g.gain.exponentialRampToValueAtTime(0.001,t+dur);
     src.connect(f); f.connect(g); g.connect(out.in);
     src.start(t); src.stop(t+dur);
   },
@@ -119,9 +146,17 @@ const SFX = {
   PENT:[196,220,247,294,330,392,440,494,587,659,784],
   ROOTS:[196,196,261.6,196,146.8,196,261.6,146.8],
   bar:0,
+  /* ⚠️ PLAYTEST: the jug band used to play FOREVER — ~3 Karplus-Strong plucks
+     a second, every second of every day, feedback 0.93 and a bright lowpass.
+     Relentless, and the opposite of "peaceful nature". The band now plays only
+     when there is a REASON: June's fiddle lead, which it backs. Otherwise the
+     mountain's own bed carries the room. (`musicOn` can turn the band back on
+     for a special moment; nothing sets it today.) */
+  musicOn:false, fiddleLeadUntil:0,
   musicUpdate(dt){
     if(!this.ready || this.muted) return;
     const t=this.ctx.currentTime;
+    if(!this.musicOn && t>=this.fiddleLeadUntil) return;
     if(t<this.nextStep) return;
     const stepDur=60/this.tempo/2; // 8ths
     this.nextStep=Math.max(t, this.nextStep)+stepDur;
@@ -176,37 +211,89 @@ const SFX = {
     if(this.ambT>0) return;
     const ph=CYCLE?CYCLE.phase:"morning";
     const season=(typeof SEASONS!=="undefined")?SEASONS.current:"fall";
-    if(ph==="morning"){ // birdsong (thin and hardy in winter)
-      const f=rand(1800,3200);
-      const reps=season==="winter"?[0]:[0,80,160];
-      reps.forEach((ms,i)=>setTimeout(()=>this.tone(f+i*rand(-200,300),0.09,"sine",season==="winter"?0.07:0.12),ms));
-      this.ambT=season==="winter"?rand(3,7):rand(1.2,3.5);
+    /* ⚠️ PLAYTEST REWRITE. Every one of these lived in the most piercing band
+       of human hearing: cicadas were bandpass noise at 5200Hz with Q=3 (that
+       IS a screech), crickets 4200Hz, peepers 2700Hz, birds up to 3200Hz in
+       90ms stabs. All moved DOWN an octave or more, given length and softer
+       gain, and the 5.2kHz cicada is deleted outright. The continuous wind and
+       water bed (startNatureBed) now carries the soundscape; these are just
+       occasional voices on top of it. */
+    if(ph==="morning"){                            // birdsong: falling, warm, sparse
+      const f=rand(900,1500);
+      const reps=season==="winter"?[0]:[0,150];
+      reps.forEach((ms,i)=>setTimeout(()=>this.tone(f+i*rand(-120,160),0.22,"sine",
+        season==="winter"?0.045:0.06,undefined,undefined,-180),ms));
+      this.ambT=season==="winter"?rand(5,10):rand(3,7);
     } else if(ph==="afternoon"){
-      if(season==="summer"){ this.noise(1.1,0.05,5200,3);
-      } else if(Math.random()<0.5){ const f=rand(1600,2600); this.tone(f,0.12,"sine",0.08); }
-      this.ambT=rand(2,5);
+      if(Math.random()<0.5){ const f=rand(800,1400); this.tone(f,0.26,"sine",0.05,undefined,undefined,-140); }
+      this.ambT=rand(4,9);
     } else {
       if(season==="winter"){                       // wind, and an owl with opinions
-        this.noise(rand(1.2,2.2),0.09,300,0.5,undefined,undefined,-120);
-        if(Math.random()<0.12) setTimeout(()=>this.tone(340,0.5,"triangle",0.12,undefined,undefined,-40),400);
-        this.ambT=rand(1.6,3.2);
-      } else if(season==="spring"){                // peepers
-        const n=4+irand(4);
-        for(let i=0;i<n;i++) setTimeout(()=>this.tone(2700+rand(-200,300),0.06,"sine",0.08),i*70);
-        this.ambT=rand(0.6,1.2);
-      } else if(season==="summer"){                // cicadas saw away
-        this.noise(rand(0.8,1.4),0.06,5200,3);
-        if(Math.random()<0.08) setTimeout(()=>this.tone(340,0.5,"triangle",0.11,undefined,undefined,-40),400);
-        this.ambT=rand(1,2);
-      } else {                                     // fall crickets (the original)
-        const n=3+irand(3);
-        for(let i=0;i<n;i++) setTimeout(()=>this.tone(4200+rand(-300,300),0.05,"sine",0.07),i*90);
-        if(ph==="night"&&Math.random()<0.1) setTimeout(()=>{ this.tone(340,0.5,"triangle",0.12,undefined,undefined,-40); },400);
-        this.ambT=rand(0.8,1.6);
+        this.noise(rand(1.6,2.6),0.055,220,0.4,undefined,undefined,-90);
+        if(Math.random()<0.12) setTimeout(()=>this.tone(300,0.7,"sine",0.07,undefined,undefined,-40),400);
+        this.ambT=rand(3,6);
+      } else if(season==="spring"){                // peepers, an octave down
+        const n=2+irand(3);
+        for(let i=0;i<n;i++) setTimeout(()=>this.tone(1350+rand(-90,120),0.13,"sine",0.04),i*150);
+        this.ambT=rand(2,4);
+      } else {                                     // crickets — summer & fall
+        const n=2+irand(2);
+        for(let i=0;i<n;i++) setTimeout(()=>this.tone(2100+rand(-140,160),0.1,"sine",0.035),i*170);
+        if(ph==="night"&&Math.random()<0.1) setTimeout(()=>this.tone(300,0.7,"sine",0.07,undefined,undefined,-40),400);
+        this.ambT=rand(1.8,3.6);
       }
     }
   },
-  update(dt){ this.musicUpdate(dt); this.ambUpdate(dt); },
+
+  /* ---------- THE BED: continuous, soft, always there ----------
+     Discrete blips can never sound like a place. A quiet wind layer plus the
+     crick running is what makes a mountain feel like a mountain — and it gives
+     the ear something gentle to sit on instead of silence punctuated by pings. */
+  bedNodes:null,
+  startNatureBed(){
+    if(!this.ready || this.bedNodes) return;
+    const ctx=this.ctx, t=ctx.currentTime;
+    const mk=(cutoff, q, gain, lfoRate, lfoDepth)=>{
+      const len=(4*ctx.sampleRate)|0;
+      const buf=ctx.createBuffer(1,len,ctx.sampleRate);
+      const d=buf.getChannelData(0);
+      /* brown-ish noise: integrated white, far softer than raw white noise */
+      let last=0;
+      for(let i=0;i<len;i++){ const w=Math.random()*2-1; last=(last+0.02*w)/1.02; d[i]=last*3.5; }
+      const src=ctx.createBufferSource(); src.buffer=buf; src.loop=true;
+      const f=ctx.createBiquadFilter(); f.type="lowpass"; f.frequency.value=cutoff; f.Q.value=q;
+      const g=ctx.createGain(); g.gain.value=gain;
+      /* slow swell so the wind breathes instead of hissing flat */
+      const lfo=ctx.createOscillator(); lfo.frequency.value=lfoRate;
+      const lg=ctx.createGain(); lg.gain.value=lfoDepth;
+      lfo.connect(lg); lg.connect(g.gain);
+      src.connect(f); f.connect(g); g.connect(this.ambG);
+      src.start(t); lfo.start(t);
+      return {src,g,lfo,f};
+    };
+    this.bedNodes={
+      wind: mk(420, 0.6, 0.10, 0.055, 0.055),   // the ridge
+      leaves: mk(1500, 0.5, 0.022, 0.09, 0.014), // treeline rustle
+      crick: mk(950, 1.4, 0.020, 0.13, 0.008),   // water over stones
+    };
+  },
+  /* the bed leans with weather and time — louder wind in a storm, hushed at night */
+  bedUpdate(){
+    const B=this.bedNodes; if(!B) return;
+    const storm=(typeof G_STATE!=="undefined" && G_STATE && G_STATE.weather==="storm");
+    const night=(typeof CYCLE!=="undefined" && CYCLE.phase==="night");
+    const w=storm?0.26:(night?0.07:0.10);
+    const t=this.ctx.currentTime;
+    B.wind.g.gain.setTargetAtTime(w, t, 2.5);
+    B.wind.f.frequency.setTargetAtTime(storm?700:420, t, 2.5);
+    B.leaves.g.gain.setTargetAtTime(storm?0.05:0.022, t, 2.5);
+  },
+  bedT:0,
+  update(dt){
+    this.musicUpdate(dt); this.ambUpdate(dt);
+    if(this.ready && !this.bedNodes) this.startNatureBed();
+    this.bedT-=dt; if(this.bedT<=0){ this.bedT=1.5; this.bedUpdate(); }
+  },
 };
 
 /* camera shake helper lives here for convenience */

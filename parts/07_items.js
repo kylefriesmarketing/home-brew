@@ -168,12 +168,20 @@ ITEMS.update = function(dt){
         const fwd=Math.hypot(it.x-rig.x, it.z-rig.z);
         const dy=it.y-sp.y;
         const pitch=-Math.atan2(Math.max(fwd,0.01), -dy);
-        pa.armL.rotation.x=damp(pa.armL.rotation.x, pitch, 16, dt);
-        pa.armR.rotation.x=damp(pa.armR.rotation.x, pitch, 16, dt);
-        /* hands converge on the cargo's width */
+        /* ⚠️ PLAYTEST (Kyle): "the arms glitch out" — half of it was HERE.
+           This used to damp FROM `pa.armL.rotation.x`, the value animatePerson
+           had just written from its own walk-swing spring. Two systems owning
+           one property: the IK could never converge (it only ever moved a
+           fraction toward the target before being overwritten) and the arm
+           vibrated between the swing pose and the carry pose every frame.
+           The IK now keeps its OWN damped state and ASSIGNS — one authority
+           for the value, so it actually reaches the cargo and holds still. */
         const grip=0.1+ (it.r||0.3)*0.35;
-        pa.armL.rotation.z=damp(pa.armL.rotation.z,  grip, 14, dt);
-        pa.armR.rotation.z=damp(pa.armR.rotation.z, -grip, 14, dt);
+        rig._ikPitch = damp(rig._ikPitch ?? pitch, pitch, 16, dt);
+        rig._ikGrip  = damp(rig._ikGrip  ?? grip,  grip,  14, dt);
+        pa.armL.rotation.x=pa.armR.rotation.x=rig._ikPitch;
+        pa.armL.rotation.z= rig._ikGrip;
+        pa.armR.rotation.z=-rig._ikGrip;
       }
       continue;
     }

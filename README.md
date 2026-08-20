@@ -1,9 +1,69 @@
-# HOME BREW — dev notes (v2.3 — June plays for real)
+# HOME BREW — dev notes (v2.4 — the playtest fixes)
 ### Smoky Mountain brewery tycoon · Dirty Boy Devs · The Room catalog
 
 **PLAY: open `my-brew.html` in any browser.** Self-contained, saves on sleep (localStorage).
 Old v0.1 saves load fine — the save system deep-defaults missing fields.
 **LIVE: https://kylefriesmarketing.github.io/home-brew/** (deploy = `PUSH-HOMEBREW.bat`).
+
+## New in v2.4 — **THE PLAYTEST FIXES** (Kyle played it)
+
+Four complaints, four real bugs. Two of them turned out to be the same bug.
+
+### 🎵 "the sound NEEDS to go — screeching and awful, not peaceful nature"
+Correct on every count, and the causes were specific:
+- **The jug band never stopped.** `musicUpdate` fired ~3 Karplus-Strong plucks
+  a second (feedback 0.93, bright lowpass) every second of every day, forever.
+  It now plays **only when there's a reason** — June's fiddle lead, which it
+  backs. `musicOn:false` is the default. Silence, and the mountain fills it.
+- **Cicadas were bandpass noise at 5200Hz with Q=3.** That is, literally, a
+  screech generator, sitting in the most piercing band of human hearing.
+  Deleted. Crickets 4200→2100Hz, peepers 2700→1350Hz, birds 1800-3200→900-1500
+  with a falling bend, all longer and quieter.
+- **Every sound in the game clicked.** `tone()` and `noise()` both did
+  `gain.setValueAtTime(vol, t)` — an instant onset is a pop, and there were
+  hundreds a minute. A 12ms attack ramp removed all of them at once.
+- **Nothing tamed the master bus.** Now: high-shelf −13dB above 3.2kHz, a 9kHz
+  lowpass, then a gentle limiter. Measured response — **250Hz–1kHz: 0dB
+  (warmth untouched); 5kHz: −9.8dB; 8kHz: −11.3dB; 12kHz: −18.4dB.**
+- 🌲 **And a real bed**: continuous brown-noise wind, treeline rustle and the
+  crick running, each with a slow breathing LFO. It leans with the weather
+  (storm wind 0.10→0.26 and opens up to 700Hz) and hushes at night. Discrete
+  blips can never sound like a place; this can.
+
+### 🧱 "the texture for the floor and walls is shaking"
+`clayBoilSurface` jitters the thumbprint maps each 12fps frame — but those two
+textures are **shared by every clay material in the game**, so it was boiling
+the ground and walls too, and on a big surface the **rotation** term swung the
+far corners a long way every held frame. Rotation removed, offset cut 0.03→
+0.006 (measured drift 0.0046). ⚠️ **never re-add rotation here** — it can't be
+made small enough to be safe on a large plane; a stronger boil needs its own
+texture pair used only by small props.
+
+### 🚶 "movement is clunky" + 🦾 "the arms glitch out" — *the same root cause*
+- **THE BIG ONE**: `swing = Math.sin(wp*6)`. `walkPhase` advances at
+  `sp*2.6`/sec, so at walking speed the sine argument advanced **~55 rad/s — a
+  full limb cycle every 7 frames, about 8.7 CYCLES PER SECOND.** The legs and
+  arms weren't walking, they were *buzzing*, and the 12fps quantisation was
+  inert because the phase outran the clock (`floor()` advanced ~2 units per
+  frame). At ×0.64: **1.5 cycles/sec walking, 2.17 running** — a real gait, and
+  the stop-motion stepping finally reads.
+- **The player was latched at 12fps.** The pose latch held his *world position*
+  12×/sec while the camera tracked at 60 — he juddered against the ground and
+  lagged your input. The player is now excluded; the stop-motion look never came
+  from this (it's the quantised walkPhase). ⚠️ don't add him back.
+- **The arms ran two different animation systems**: left damped toward a target,
+  right driven by the raw swing. One spring now, mirrored, with carry pulling
+  both arms equally.
+- **The overshoot term was a per-frame delta ×2.2**, not a velocity — spiking
+  every time speed changed. Now a real rate, clamped, and *damped* (the
+  quantised target makes raw velocity spiky by construction).
+- **The carry IK fought the walk swing** — it damped *from* the value
+  `animatePerson` had just written, so it could never converge and the arm
+  vibrated between two poses. The IK keeps its own state and assigns.
+
+**Measured:** arm max frame-jump **0.602 → 0.086 rad**; direction reversals
+22-in-47-frames → 8-in-180; carry pose settles to a dead-still 0.0000 range;
+player position held-frames 0/89. 0 errors, ~4.0ms/frame.
 
 ## New in v2.3 — **JUNE PLAYS FOR REAL** (audio pass)
 
